@@ -1755,13 +1755,15 @@ document.addEventListener('DOMContentLoaded', () => {
         // Stop background dropout check if running
         stopBackgroundDropoutCheck();
 
-        // Check message count - determines if we can re-queue or need to go to final choice
+        // Check message counts - determines if we can re-queue or need to go to final choice
         const messageCount = messageList.childElementCount;
+        // Count only messages FROM partner (assistant class) - this is what matters for assessment
+        const partnerMessageCount = messageList.querySelectorAll('.message-bubble.assistant').length;
 
         logToRailway({
             type: 'PARTNER_DROPOUT_MESSAGE_CHECK',
-            message: `Partner dropped - checking message count: ${messageCount}`,
-            context: { message_count: messageCount, role: currentRole }
+            message: `Partner dropped - checking message counts`,
+            context: { total_messages: messageCount, partner_messages: partnerMessageCount, role: currentRole }
         });
 
         // Report to backend and check if we should be re-queued
@@ -1776,7 +1778,7 @@ document.addEventListener('DOMContentLoaded', () => {
             logToRailway({
                 type: 'REPORT_PARTNER_DROPPED_RESPONSE',
                 message: `Backend response for partner dropout`,
-                context: { result, message_count: messageCount }
+                context: { result, total_messages: messageCount, partner_messages: partnerMessageCount }
             });
 
             // If re-queued (no messages, under 4 min total wait), go back to waiting room
@@ -1814,14 +1816,14 @@ document.addEventListener('DOMContentLoaded', () => {
                 return;
             }
 
-            // If timed out (exceeded 4 min total wait), redirect to Prolific
-            if (result.timed_out && messageCount === 0) {
-                logUiEvent('partner_dropout_timeout_exceeded');
+            // If timed out (exceeded 4 min total wait) AND no partner messages, redirect to Prolific
+            if (result.timed_out && partnerMessageCount === 0) {
+                logUiEvent('partner_dropout_timeout_exceeded', { total_messages: messageCount, partner_messages: partnerMessageCount });
 
                 logToRailway({
                     type: 'PARTNER_DROPPED_TIMEOUT_EXCEEDED',
-                    message: 'Partner dropped and total wait time exceeded - redirecting to Prolific',
-                    context: { role: currentRole }
+                    message: 'Partner dropped and total wait time exceeded with no partner messages - redirecting to Prolific',
+                    context: { role: currentRole, total_messages: messageCount, partner_messages: partnerMessageCount }
                 });
 
                 // Clean up timer
@@ -1836,7 +1838,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (isProduction) {
                     window.location.href = PROLIFIC_TIMED_OUT_URL;
                 } else {
-                    alert('DEV MODE: Partner dropped and exceeded total wait time. Would redirect to Prolific timeout URL.');
+                    alert('DEV MODE: Partner dropped, exceeded total wait time, and no partner messages received. Would redirect to Prolific timeout URL.');
                 }
                 return;
             }
@@ -1850,16 +1852,17 @@ document.addEventListener('DOMContentLoaded', () => {
             // Fall through to original logic on error
         }
 
-        // If we get here with 0 messages (backend error or old logic), redirect to Prolific
-        if (messageCount === 0) {
-            // No messages exchanged - no useful data, redirect to Prolific
+        // If we get here with 0 partner messages, redirect to Prolific
+        // (they may have sent messages, but never received any to assess)
+        if (partnerMessageCount === 0) {
+            // No messages received from partner - nothing to assess, redirect to Prolific
             logToRailway({
-                type: 'PARTNER_DROPOUT_NO_MESSAGES',
-                message: 'Partner dropped with 0 messages - redirecting to Prolific timeout',
-                context: { role: currentRole }
+                type: 'PARTNER_DROPOUT_NO_PARTNER_MESSAGES',
+                message: 'Partner dropped before sending any messages - redirecting to Prolific timeout',
+                context: { role: currentRole, total_messages: messageCount, partner_messages: partnerMessageCount }
             });
 
-            logUiEvent('partner_dropout_no_messages');
+            logUiEvent('partner_dropout_no_partner_messages', { total_messages: messageCount });
 
             // Clean up timer
             if (studyTimer) {
@@ -1873,12 +1876,12 @@ document.addEventListener('DOMContentLoaded', () => {
             if (isProduction) {
                 window.location.href = PROLIFIC_TIMED_OUT_URL;
             } else {
-                alert('DEV MODE: Partner dropped with 0 messages. Would redirect to Prolific timeout URL.');
+                alert('DEV MODE: Partner dropped before sending any messages. Would redirect to Prolific timeout URL.');
             }
             return;
         }
 
-        // ≥1 message: Continue to final choice flow (useful data collected)
+        // ≥1 partner message: Continue to final choice flow (they have something to assess)
 
         // Different handling based on role
         if (currentRole === 'witness') {
