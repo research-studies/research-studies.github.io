@@ -92,7 +92,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const postDemoNextBtn = document.getElementById('post-demo-next-btn');
     const postDemoPageIndicator = document.getElementById('post-demo-page-indicator');
     let currentPostDemoPage = 1;
-    const totalPostDemoPages = 3;
+    const totalPostDemoPages = 4;
     const waitingStatusP = document.getElementById('waiting-status');
     const elapsedTimeSpan = document.getElementById('elapsed-time');
     const waitingTimeoutWarningDiv = document.getElementById('waiting-timeout-warning');
@@ -1047,15 +1047,20 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         if (currentPostDemoPage === totalPostDemoPages) {
-            // Last page - hide Next, show attention check (not Enter Waiting Room yet)
-            if (postDemoNextBtn) postDemoNextBtn.style.display = 'none';
-            showAttentionCheck();
-        } else {
-            // Not last page - show Next, hide Enter Waiting Room and attention check
-            if (postDemoNextBtn) postDemoNextBtn.style.display = 'inline-block';
+            // Last page (attention check) - change Next to Submit Answer
+            if (postDemoNextBtn) {
+                postDemoNextBtn.style.display = 'inline-block';
+                postDemoNextBtn.textContent = 'Submit Answer';
+            }
             enterWaitingRoomButton.style.display = 'none';
-            const attentionCheckSection = document.getElementById('attention-check-section');
-            if (attentionCheckSection) attentionCheckSection.style.display = 'none';
+            populateAttentionCheck();
+        } else {
+            // Not last page - show Next, hide Enter Waiting Room
+            if (postDemoNextBtn) {
+                postDemoNextBtn.style.display = 'inline-block';
+                postDemoNextBtn.textContent = 'Next →';
+            }
+            enterWaitingRoomButton.style.display = 'none';
         }
 
         logToRailway({
@@ -1099,8 +1104,13 @@ document.addEventListener('DOMContentLoaded', () => {
         return shuffled;
     }
 
-    function showAttentionCheck() {
-        const attentionCheckSection = document.getElementById('attention-check-section');
+    let attentionCheckPopulated = false;
+
+    function populateAttentionCheck() {
+        // Only populate once
+        if (attentionCheckPopulated) return;
+        attentionCheckPopulated = true;
+
         const questionEl = document.getElementById('attention-check-question');
         const errorEl = document.getElementById('attention-check-error');
 
@@ -1142,9 +1152,6 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         });
 
-        attentionCheckSection.style.display = 'block';
-        enterWaitingRoomButton.style.display = 'none';
-
         logToRailway({
             type: 'ATTENTION_CHECK_SHOWN',
             message: 'Attention check displayed',
@@ -1152,59 +1159,52 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    // Attention check submit handler
-    const attentionCheckSubmit = document.getElementById('attention-check-submit');
-    if (attentionCheckSubmit) {
-        attentionCheckSubmit.addEventListener('click', () => {
-            const selected = document.querySelector('input[name="attention-check"]:checked');
-            const errorEl = document.getElementById('attention-check-error');
+    function validateAttentionCheck() {
+        const selected = document.querySelector('input[name="attention-check"]:checked');
+        const errorEl = document.getElementById('attention-check-error');
 
-            if (!selected) {
-                errorEl.textContent = 'Please select an answer.';
-                errorEl.style.display = 'block';
-                return;
-            }
+        if (!selected) {
+            errorEl.textContent = 'Please select an answer.';
+            errorEl.style.display = 'block';
+            return false;
+        }
 
-            attentionCheckAttempts++;
-            const selectedIndex = parseInt(selected.value);
-            const isCorrect = selectedIndex === attentionCheckCorrectIndex;
+        attentionCheckAttempts++;
+        const selectedIndex = parseInt(selected.value);
+        const isCorrect = selectedIndex === attentionCheckCorrectIndex;
 
-            logToRailway({
-                type: 'ATTENTION_CHECK_SUBMITTED',
-                message: `Attention check answer submitted`,
-                context: {
-                    role: currentRole,
-                    selectedIndex,
-                    correctIndex: attentionCheckCorrectIndex,
-                    isCorrect,
-                    attempt: attentionCheckAttempts
-                }
-            });
-
-            if (isCorrect) {
-                // Correct! Hide attention check, show Enter Waiting Room button
-                errorEl.style.display = 'none';
-                document.getElementById('attention-check-section').style.display = 'none';
-                enterWaitingRoomButton.style.display = 'block';
-
-                logToRailway({
-                    type: 'ATTENTION_CHECK_PASSED',
-                    message: 'Attention check passed',
-                    context: { role: currentRole, attempts: attentionCheckAttempts }
-                });
-            } else {
-                // Wrong - show error, let them retry
-                errorEl.textContent = "That's not quite right. Please read the instructions again and try again.";
-                errorEl.style.display = 'block';
-
-                logToRailway({
-                    type: 'ATTENTION_CHECK_FAILED_ATTEMPT',
-                    message: 'Attention check wrong answer',
-                    context: { role: currentRole, attempt: attentionCheckAttempts, selectedIndex }
-                });
+        logToRailway({
+            type: 'ATTENTION_CHECK_SUBMITTED',
+            message: 'Attention check answer submitted',
+            context: {
+                role: currentRole,
+                selectedIndex,
+                correctIndex: attentionCheckCorrectIndex,
+                isCorrect,
+                attempt: attentionCheckAttempts
             }
         });
+
+        if (isCorrect) {
+            errorEl.style.display = 'none';
+            logToRailway({
+                type: 'ATTENTION_CHECK_PASSED',
+                message: 'Attention check passed',
+                context: { role: currentRole, attempts: attentionCheckAttempts }
+            });
+            return true;
+        } else {
+            errorEl.textContent = "That's not quite right. Please read the instructions again and try again.";
+            errorEl.style.display = 'block';
+            logToRailway({
+                type: 'ATTENTION_CHECK_FAILED_ATTEMPT',
+                message: 'Attention check wrong answer',
+                context: { role: currentRole, attempt: attentionCheckAttempts, selectedIndex }
+            });
+            return false;
+        }
     }
+
     // --- END ATTENTION CHECK LOGIC ---
 
     function showRoleInstructionsInWaitingRoom(role, socialStyle = null, socialStyleDescription = null) {
@@ -2522,7 +2522,15 @@ Thank you again for your participation!
 
     if (postDemoNextBtn) {
         postDemoNextBtn.addEventListener('click', () => {
-            if (currentPostDemoPage < totalPostDemoPages) {
+            if (currentPostDemoPage === totalPostDemoPages) {
+                // On attention check page - validate before proceeding
+                if (validateAttentionCheck()) {
+                    // Correct! Hide nav and show Enter Waiting Room button
+                    document.getElementById('post-demo-nav').style.display = 'none';
+                    enterWaitingRoomButton.style.display = 'block';
+                }
+                // If wrong, validateAttentionCheck shows error, user can retry
+            } else if (currentPostDemoPage < totalPostDemoPages) {
                 currentPostDemoPage++;
                 updatePostDemoPage();
                 logUiEvent('post_demo_next_clicked', { page: currentPostDemoPage });
