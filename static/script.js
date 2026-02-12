@@ -2452,7 +2452,28 @@ Thank you again for your participation!
         aiConnectionModal.style.display = 'none';
 
         if (scenario === 'end_study') {
-            // Scenario 2: Timer expired - end study, go to feedback form
+            // Check if AI ever sent any messages
+            const aiMessageCount = messageList.querySelectorAll('.message-bubble.assistant').length;
+
+            if (aiMessageCount === 0) {
+                // AI never responded — not participant's fault, redirect with TIMED_OUT code
+                logToRailway({
+                    type: 'AI_FAILURE_NO_MESSAGES',
+                    message: 'AI connection failed and never sent any messages - redirecting to Prolific timeout',
+                    context: { scenario: 'end_study', aiMessageCount: 0 }
+                });
+
+                recordTimeoutToDatabase('ai_connection_no_messages');
+
+                if (isProduction) {
+                    window.location.href = PROLIFIC_TIMED_OUT_URL;
+                } else {
+                    alert('DEV MODE: AI never responded - would redirect to Prolific timeout URL');
+                }
+                return;
+            }
+
+            // ≥1 AI messages received: proceed to feedback form as normal
             // Clean up timer
             if (studyTimer) {
                 clearInterval(studyTimer);
@@ -2465,7 +2486,7 @@ Thank you again for your participation!
             logToRailway({
                 type: 'AI_FAILURE_END_STUDY',
                 message: 'AI connection failed with timer expired - routing to feedback form',
-                context: { scenario: 'end_study' }
+                context: { scenario: 'end_study', aiMessageCount: aiMessageCount }
             });
 
         } else {
