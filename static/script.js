@@ -628,10 +628,10 @@ document.addEventListener('DOMContentLoaded', () => {
                         choiceHumanButton.disabled = false;
                         choiceAiButton.disabled = false;
 
-                        // Update title
+                        // Hide the assessment h4 — the red timer warning is enough
                         const assessmentTitle = assessmentAreaDiv.querySelector('h4');
                         if (assessmentTitle) {
-                            assessmentTitle.textContent = "Time expired! Please make your final assessment:";
+                            assessmentTitle.style.display = 'none';
                         }
 
                         // Update timer message now that assessment UI is visible
