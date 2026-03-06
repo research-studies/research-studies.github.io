@@ -1313,6 +1313,15 @@ document.addEventListener('DOMContentLoaded', () => {
         matchCheckInterval = setInterval(async () => {
             const elapsed = Math.floor((Date.now() - startTime) / 1000);
 
+            // Auto-timeout after 2 minutes (120 seconds) - checked BEFORE fetch
+            // so network errors can't prevent the timeout from firing
+            if (elapsed >= 120) {
+                clearInterval(matchCheckInterval);
+                clearInterval(waitingTimerInterval);
+                handleMatchTimeout();
+                return;
+            }
+
             // Check for match
             try {
                 const response = await fetch(`/check_match_status?session_id=${sessionId}`);
@@ -1400,12 +1409,6 @@ document.addEventListener('DOMContentLoaded', () => {
                     }
                 }
 
-                // Auto-timeout after 2 minutes (120 seconds) - no warning, just redirect
-                if (elapsed >= 120) {
-                    clearInterval(matchCheckInterval);
-                    clearInterval(waitingTimerInterval); // Stop timer updates
-                    handleMatchTimeout();
-                }
             } catch (error) {
                 logToRailway({
                     type: 'MATCH_CHECK_ERROR',
@@ -3861,7 +3864,20 @@ Thank you again for your participation!
         } else {
             // Interrogator: Proceed to summary page
             showMainPhase('final');
-            displayFinalPage(finalSummaryData);
+            if (finalSummaryData) {
+                displayFinalPage(finalSummaryData);
+            } else {
+                // Partner dropped before study_over — no summary data available
+                // Skip summary, go straight to debrief
+                debriefPhaseDiv.style.display = 'block';
+                summaryPhaseDiv.style.display = 'none';
+
+                logToRailway({
+                    type: 'INTERROGATOR_SKIPPED_SUMMARY_NO_DATA',
+                    message: 'Partner dropped - no summary data, routing interrogator to debrief',
+                    context: { role: currentRole, partnerDropped: partnerDroppedFlag }
+                });
+            }
         }
     });
 
