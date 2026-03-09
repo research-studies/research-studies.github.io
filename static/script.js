@@ -119,10 +119,12 @@ document.addEventListener('DOMContentLoaded', () => {
     const aiConnectionMessage = document.getElementById('ai-connection-message');
     const aiConnectionButton = document.getElementById('ai-connection-button');
 
-    // 1. Prolific Placeholder URLs
-    const PROLIFIC_COMPLETION_URL = "https://app.prolific.com/submissions/complete?cc=CR0KFVQO";
-    const PROLIFIC_REJECTION_URL = "https://app.prolific.com/submissions/complete?cc=C120SCQ9";
-    const PROLIFIC_TIMED_OUT_URL = "https://app.prolific.com/submissions/complete?cc=C1B54A7Q";
+    // 1. Prolific Completion URLs
+    const PROLIFIC_COMPLETION_URL = "https://app.prolific.com/submissions/complete?cc=CR0KFVQO";       // Completed study normally
+    const PROLIFIC_NO_CONSENT_URL = "https://app.prolific.com/submissions/complete?cc=C120SCQ9";       // Declined consent
+    const PROLIFIC_TIMED_OUT_URL = "https://app.prolific.com/submissions/complete?cc=C1B54A7Q";        // Waiting room timeout (no match)
+    const PROLIFIC_PARTNER_DROPPED_URL = "https://app.prolific.com/submissions/complete?cc=C19WFTZR";  // Partner dropped mid-conversation
+    const PROLIFIC_ABANDONED_URL = "https://app.prolific.com/submissions/complete?cc=CZSGWT2I";        // Page refresh/abandon
 
 
     // 2. Production Mode Check
@@ -1839,9 +1841,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 recordTimeoutToDatabase('partner_timeout_exceeded_total_wait');
 
                 if (isProduction) {
-                    window.location.href = PROLIFIC_TIMED_OUT_URL;
+                    window.location.href = PROLIFIC_PARTNER_DROPPED_URL;
                 } else {
-                    alert('DEV MODE: Partner dropped, exceeded total wait time, and no partner messages received. Would redirect to Prolific timeout URL.');
+                    alert('DEV MODE: Partner dropped, exceeded total wait time, and no partner messages received. Would redirect to Prolific partner-dropped URL.');
                 }
                 return;
             }
@@ -1877,9 +1879,9 @@ document.addEventListener('DOMContentLoaded', () => {
             recordTimeoutToDatabase('partner_timeout_no_messages');
 
             if (isProduction) {
-                window.location.href = PROLIFIC_TIMED_OUT_URL;
+                window.location.href = PROLIFIC_PARTNER_DROPPED_URL;
             } else {
-                alert('DEV MODE: Partner dropped before sending any messages. Would redirect to Prolific timeout URL.');
+                alert('DEV MODE: Partner dropped before sending any messages. Would redirect to Prolific partner-dropped URL.');
             }
             return;
         }
@@ -2100,7 +2102,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // --- MODIFICATION START ---
         if (isProduction) {
-            window.location.href = PROLIFIC_REJECTION_URL;
+            window.location.href = PROLIFIC_NO_CONSENT_URL;
         } else {
             // Keep the original behavior for local testing
             mainContainer.innerHTML = `
@@ -2321,8 +2323,8 @@ By clicking "I agree" below, you indicate that:
                 navigator.sendBeacon(`${API_BASE_URL}/report_abandonment`, payload);
             }
 
-            // Redirect to Prolific rejection (page is unloading anyway, but set it)
-            window.location.href = PROLIFIC_REJECTION_URL;
+            // Redirect to Prolific abandoned (page refresh/close)
+            window.location.href = PROLIFIC_ABANDONED_URL;
         };
     }
 
