@@ -2129,18 +2129,16 @@ document.addEventListener('DOMContentLoaded', () => {
         logUiEvent('consent_download_clicked');
         const timestamp = new Date().toLocaleString();
 
-        // NEW: Use role-specific consent text
-        const roleText = assignedRole === 'interrogator'
-            ? 'Your Role: Interrogator\n\nYour task: Determine if your partner is human or AI.\n- After each message exchange, rate your confidence about whether you believe you are talking to a human or an AI.'
-            : 'Your Role: Witness\n\nYour task: Convince your partner that you are human.\n- Respond naturally to your partner\'s questions and messages.\n- You may be assigned a specific conversation style to follow during the interaction.';
-
-        // If they want to download, generate the PDF and then move to the next phase.
-        const consentText = `
+        // Role-specific consent text matching IRB-approved forms
+        let consentText;
+        if (assignedRole === 'interrogator') {
+            consentText = `
 CONSENT TO PARTICIPATE IN RESEARCH
-Title of Study: Interaction Study
+Title of Study: Measuring Real-Time AI Detection
+Principal Investigator: Nykko Vitali (nvitali@fas.harvard.edu)
+Faculty Sponsor: Jason Mitchell
 Participant ID: ${participantId}
 Prolific ID: ${prolificPid || 'N/A'}
-${roleText}
 
 [CONSENT RECORDED: Participant agreed to participate on ${timestamp}]
 
@@ -2148,14 +2146,17 @@ About this Study
 You are being asked to participate in a research study. This form provides you with information about the study.
 
 Purpose of Research
-This research examines how people make judgments during conversational interactions and how these judgments change over time.
+This research examines how people evaluate text-based conversations and how these judgments change over time.
 
 What You Will Be Asked to Do
 If you agree to participate, you will:
-- Engage in a text-based conversation with a conversational partner.
-- Complete a brief demographic questionnaire at the beginning.
-- The total time commitment will be approximately 10 minutes.
-- You are free to share information as you see fit during the conversation but should not share more than you would be willing to share with a stranger.
+- Engage in a text-based conversation with another person or with a Large Language Model (such as Chat-GPT)
+- Determine if you're talking to a human or an AI each turn
+- Rate your confidence about whether you believe you are talking to a human or an AI using a sliding scale (0 = definitely human, 1 = definitely AI)
+- Provide a comment about your experience at the end of the conversation
+- Complete a brief demographic questionnaire at the beginning
+- The total time commitment will be approximately 15 minutes
+- You are free to share information as you see fit during the conversation but should not share more than you would be willing to share with a stranger
 
 Your Rights as a Participant
 - Your participation is voluntary.
@@ -2164,19 +2165,22 @@ Your Rights as a Participant
 - You may not be told everything about the purpose of this research study initially, but you will be fully informed after completion.
 
 Risks and Benefits
-- There are no known risks associated with participating in this study beyond those encountered in normal daily conversation.
-- While there are no direct benefits to you, your participation helps advance our understanding of human-AI interaction and judgment processes.
+- You may be matched with a human participant, and due to the unpredictable nature of online conversations your conversational partner may use language you consider offensive
+- While there are no direct benefits to you, your participation helps advance our understanding of human-AI interaction and judgment processes
 
 Compensation
-- You will receive compensation equivalent to $8.00 per hour for your participation through the online platform.
+- You will receive compensation equivalent to $8.00 per hour for your participation through the online platform
+- You will be compensated for your time spent on the study if you leave as a result of your partner saying something offensive during the course of the conversation
+- You will be compensated if your time spent on the study if your partner leaves early for any reason
 
 Confidentiality
-- Your responses will be stored securely.
-- Data will be analyzed without any identifying information.
-- Only researchers will have access to the data.
-- Anonymized results derived from your data may be shared in OpenScience frameworks for transparency of our research progress.
-- Any personally identifying information you may share during conversations will be removed from analyses and will not be used in research outputs.
-- Analyses (quantitative and qualitative) will be carried out on any text you write during the study.
+- Your responses will be stored securely
+- If you are matched with an AI, conversations are processed under Harvard's institutional agreement; your responses will not be used to train AI models
+- Data will be analyzed without any identifying information
+- Only researchers will have access to the data
+- Anonymized results derived from your data may be shared in scientific databases for transparency of our research process
+- Any personally identifying information you may share during conversations will be removed from analyses and will not be used in research outputs
+- Analyses (quantitative and qualitative) will be carried out on any text you write during the study
 
 Questions or Concerns?
 - For questions about the research: Contact the Principal Investigator at nvitali@fas.harvard.edu
@@ -2190,7 +2194,70 @@ By clicking "I agree" below, you indicate that:
 - You understand you can withdraw at any time.
 
 [PARTICIPANT ACCEPTED THE ABOVE TERMS ON ${new Date().toLocaleString()}]
-        `;
+            `;
+        } else {
+            consentText = `
+CONSENT TO PARTICIPATE IN RESEARCH
+Title of Study: Measuring Real-Time AI Detection
+Principal Investigator: Nykko Vitali (nvitali@fas.harvard.edu)
+Faculty Sponsor: Jason Mitchell
+Participant ID: ${participantId}
+Prolific ID: ${prolificPid || 'N/A'}
+
+[CONSENT RECORDED: Participant agreed to participate on ${timestamp}]
+
+About this Study
+You are being asked to participate in a research study. This form provides you with information about the study.
+
+Purpose of Research
+This research examines how people evaluate text-based conversations and how these judgments change over time.
+
+What You Will Be Asked to Do
+If you agree to participate, you will:
+- Engage in a text-based conversation with another person
+- Emulate an assigned conversation style throughout your conversation
+- Provide a comment about your experience at the end of the conversation
+- Complete a brief demographic questionnaire at the beginning
+- The total time commitment will be approximately 15 minutes
+- You are free to share information as you see fit during the conversation but should not share more than you would be willing to share with a stranger
+
+Your Rights as a Participant
+- Your participation is voluntary.
+- You may stop at any time.
+- You may choose not to answer any question.
+- You may not be told everything about the purpose of this research study initially, but you will be fully informed after completion.
+
+Risks and Benefits
+- You may be matched with a human participant, and due to the unpredictable nature of online conversations your conversational partner may use language you consider offensive
+- While there are no direct benefits to you, your participation helps advance our understanding of human-AI interaction and judgment processes
+
+Compensation
+- You will receive compensation equivalent to $8.00 per hour for your participation through the online platform
+- You will be compensated for your time spent on the study if you leave as a result of your partner saying something offensive during the course of the conversation
+- You will be compensated if your time spent on the study if your partner leaves early for any reason
+
+Confidentiality
+- Your responses will be stored securely
+- Data will be analyzed without any identifying information
+- Only researchers will have access to the data
+- Anonymized results derived from your data may be shared in scientific databases for transparency of our research process
+- Any personally identifying information you may share during conversations will be removed from analyses and will not be used in research outputs
+- Analyses (quantitative and qualitative) will be carried out on any text you write during the study
+
+Questions or Concerns?
+- For questions about the research: Contact the Principal Investigator at nvitali@fas.harvard.edu
+- For questions about your rights as a participant: Contact cuhs@harvard.edu
+
+Agreement to Participate
+By clicking "I agree" below, you indicate that:
+- You are at least 18 years old.
+- You have read and understood this consent form.
+- You voluntarily agree to participate.
+- You understand you can withdraw at any time.
+
+[PARTICIPANT ACCEPTED THE ABOVE TERMS ON ${new Date().toLocaleString()}]
+            `;
+        }
         
         generateAndDownloadPdf(consentText, `Consent_Form_${participantId}.pdf`);
 
@@ -2275,8 +2342,6 @@ Participant ID: ${participantId}
 Prolific ID: ${prolificPid || 'N/A'}
 Session ID: ${sessionId || 'N/A'}
 
-Study Debrief Form
-
 Thank you for participating in our research study. Now that you have completed the study, we would like to explain its purpose in more detail.
 
 Purpose of the Research
@@ -2286,15 +2351,13 @@ Why We Did Not Tell You Everything Initially
 When participants know exactly what researchers are studying, it can sometimes influence their responses and make them hyper-aware of potential AI "tells" or tactics. To get natural responses about your evolving confidence during the conversation, we did not tell you specifically that we were studying particular humanization tactics or measuring implicit detection processes. You were told the study involved determining whether you were talking to a human or AI, which was true, but we did not disclose our specific interest in how particular conversational strategies influence your moment-to-moment judgments.
 
 The Complete Picture
-In this study, you engaged in a conversation while providing continuous confidence ratings about whether you believed you were interacting with a human or AI. What you may not have realized is that:
+In this study, you either engaged in a conversation while providing ratings about whether you believed you were interacting with a human or AI, or you were told to emulate a particular conversation style while chatting with another human. What you may not have realized is that:
 
-1) You were always interacting with an AI system. Specifically, a large language model designed to appear human-like in conversation.
+- If you made decisions your partner was either an AI or a human. If you were told to adopt a specific persona, your partner was always a human.
 
-2) The AI used specific tactics. Based on your initial demographic responses, our system selected from various humanization tactics such as mirroring your language style, sharing personal anecdotes, expressing opinions, using humor, or subtly varying its typing style. These tactics were logged throughout your conversation.
+- Your ratings and the time you took to make each rating allow us to model how evidence accumulated in your mind toward an "AI" or "human" decision. This helps us understand the cognitive processes behind AI belief.
 
-3) Your continuous confidence ratings and the time you took to make each rating allow us to model how evidence accumulated in your mind toward an "AI" or "human" decision. This helps us understand the cognitive processes behind AI detection.
-
-Our hypothesis is that people possess subtle, implicit abilities to detect AI-generated communication that may not always rise to conscious awareness. We also predict that certain conversational tactics (like personal anecdotes or opinion expression) will be more effective at convincing humans they are talking to another person. By analyzing your moment-to-moment confidence changes alongside the specific tactics the AI used, we can better understand which strategies most effectively influence human judgment of AI authenticity.
+- Our hypothesis is that people possess subtle, implicit abilities to detect AI-generated communication that may not always rise to conscious awareness. We also predict that certain conversational tactics will be more effective at convincing humans they are talking to another person. By analyzing your moment-to-moment confidence changes alongside the specific tactics the AI or human used, we can better understand which strategies most effectively influence human judgment of AI authenticity.
 
 Questions or Concerns
 If you have any questions about this research, please contact the Principal Investigator, Nykko Vitali, at nvitali@fas.harvard.edu. If you have any concerns about your rights as a research participant, you may contact cuhs@harvard.edu
