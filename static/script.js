@@ -311,8 +311,19 @@ document.addEventListener('DOMContentLoaded', () => {
         }, timeoutMs);
     }
 
+    function recordCompletionCode(code) {
+        const id = sessionId || participantId;
+        if (id) {
+            navigator.sendBeacon(`${API_BASE_URL}/record_completion_code`, JSON.stringify({
+                session_id: id,
+                completion_code: code
+            }));
+        }
+    }
+
     function redirectToProlificTimeout() {
         clearScreenTimer();
+        recordCompletionCode('C1B54A7Q');
         if (isProduction) {
             window.location.href = PROLIFIC_TIMED_OUT_URL;
         } else {
@@ -322,6 +333,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function redirectToProlificCompletion() {
         clearScreenTimer();
+        recordCompletionCode('CR0KFVQO');
         if (isProduction) {
             window.location.href = PROLIFIC_COMPLETION_URL;
         } else {
@@ -1348,6 +1360,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     recordTimeoutToDatabase(`backend_cleanup_${result.cleanup_reason}`);
 
                     // Redirect to Prolific timeout URL
+                    recordCompletionCode('C1B54A7Q');
                     if (isProduction) {
                         window.location.href = PROLIFIC_TIMED_OUT_URL;
                     } else {
@@ -1436,6 +1449,7 @@ document.addEventListener('DOMContentLoaded', () => {
         await recordTimeoutToDatabase('waiting_room');
 
         // Auto-redirect to Prolific timeout URL (no need to wait for button click)
+        recordCompletionCode('C1B54A7Q');
         if (isProduction) {
             window.location.href = PROLIFIC_TIMED_OUT_URL;
         } else {
@@ -1840,6 +1854,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 // Record timeout to database
                 recordTimeoutToDatabase('partner_timeout_exceeded_total_wait');
 
+                recordCompletionCode('C19WFTZR');
                 if (isProduction) {
                     window.location.href = PROLIFIC_PARTNER_DROPPED_URL;
                 } else {
@@ -1878,6 +1893,7 @@ document.addEventListener('DOMContentLoaded', () => {
             // Record timeout to database
             recordTimeoutToDatabase('partner_timeout_no_messages');
 
+            recordCompletionCode('C19WFTZR');
             if (isProduction) {
                 window.location.href = PROLIFIC_PARTNER_DROPPED_URL;
             } else {
@@ -2101,6 +2117,7 @@ document.addEventListener('DOMContentLoaded', () => {
         await finalizeNoSession('consent_disagreed');
 
         // --- MODIFICATION START ---
+        recordCompletionCode('C120SCQ9');
         if (isProduction) {
             window.location.href = PROLIFIC_NO_CONSENT_URL;
         } else {
@@ -2324,6 +2341,7 @@ By clicking "I agree" below, you indicate that:
             }
 
             // Redirect to Prolific abandoned (page refresh/close)
+            recordCompletionCode('CZSGWT2I');
             window.location.href = PROLIFIC_ABANDONED_URL;
         };
     }
@@ -2381,6 +2399,7 @@ Thank you again for your participation!
             window.removeEventListener('unload', handleActualExit);
 
             // Redirect to Prolific after a short delay to ensure download starts
+            recordCompletionCode('CR0KFVQO');
             setTimeout(() => {
                 window.location.href = PROLIFIC_COMPLETION_URL;
             }, 500);
@@ -2399,6 +2418,7 @@ Thank you again for your participation!
             // DEACTIVATE the listeners before the final redirect
             window.removeEventListener('beforeunload', handleEarlyExit);
             window.removeEventListener('unload', handleActualExit);
+            recordCompletionCode('CR0KFVQO');
             window.location.href = PROLIFIC_COMPLETION_URL;
         } else {
             // For local testing, just proceed to the summary page
@@ -2533,6 +2553,7 @@ Thank you again for your participation!
 
                 recordTimeoutToDatabase('ai_connection_no_messages');
 
+                recordCompletionCode('C1B54A7Q');
                 if (isProduction) {
                     window.location.href = PROLIFIC_TIMED_OUT_URL;
                 } else {
@@ -2966,6 +2987,7 @@ Thank you again for your participation!
         logUiEvent('leave_waiting_room_clicked');
 
         // Redirect to Prolific with timeout code
+        recordCompletionCode('C1B54A7Q');
         if (isProduction) {
             window.location.href = PROLIFIC_TIMED_OUT_URL;
         } else {
