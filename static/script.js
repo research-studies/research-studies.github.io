@@ -1852,17 +1852,24 @@ document.addEventListener('DOMContentLoaded', () => {
                 recordCompletionCode('C19WFTZR');
 
                 // Show popup explaining what happened before redirecting
-                witnessEndTitle.textContent = 'Study Ended';
-                witnessEndMessage.textContent = 'Unfortunately, your conversation partner disconnected before the conversation could begin and we were unable to find a new match. Thank you for your time — you will be redirected shortly.';
-                witnessEndModal.style.display = 'flex';
-                witnessEndContinueButton.textContent = 'Continue';
-                witnessEndContinueButton.onclick = () => {
+                const overlay2 = document.createElement('div');
+                overlay2.className = 'modal-overlay';
+                overlay2.style.display = 'flex';
+                overlay2.innerHTML = `
+                    <div class="modal-content">
+                        <h3 style="text-align: center; margin-top: 0;">Study Ended</h3>
+                        <p style="text-align: center;">Unfortunately, your conversation partner disconnected before the conversation could begin and we were unable to find a new match. Thank you for your time — you will be redirected shortly.</p>
+                        <button id="partner-dropped-timeout-btn" style="margin: 20px auto; display: block;">Continue</button>
+                    </div>
+                `;
+                document.body.appendChild(overlay2);
+                document.getElementById('partner-dropped-timeout-btn').addEventListener('click', () => {
                     if (isProduction) {
                         window.location.href = PROLIFIC_PARTNER_DROPPED_URL;
                     } else {
                         alert('DEV MODE: Partner dropped, exceeded total wait time. Would redirect to Prolific partner-dropped URL.');
                     }
-                };
+                });
                 return;
             }
 
@@ -1898,17 +1905,25 @@ document.addEventListener('DOMContentLoaded', () => {
             recordCompletionCode('C19WFTZR');
 
             // Show popup explaining what happened before redirecting
-            witnessEndTitle.textContent = 'Study Ended';
-            witnessEndMessage.textContent = 'Unfortunately, your conversation partner disconnected before the conversation could begin. Thank you for your time — you will be redirected shortly.';
-            witnessEndModal.style.display = 'flex';
-            witnessEndContinueButton.textContent = 'Continue';
-            witnessEndContinueButton.onclick = () => {
+            // Use a simple dynamically created modal to avoid triggering witness-specific handlers
+            const overlay = document.createElement('div');
+            overlay.className = 'modal-overlay';
+            overlay.style.display = 'flex';
+            overlay.innerHTML = `
+                <div class="modal-content">
+                    <h3 style="text-align: center; margin-top: 0;">Study Ended</h3>
+                    <p style="text-align: center;">Unfortunately, your conversation partner disconnected before the conversation could begin. Thank you for your time — you will be redirected shortly.</p>
+                    <button id="partner-dropped-redirect-btn" style="margin: 20px auto; display: block;">Continue</button>
+                </div>
+            `;
+            document.body.appendChild(overlay);
+            document.getElementById('partner-dropped-redirect-btn').addEventListener('click', () => {
                 if (isProduction) {
                     window.location.href = PROLIFIC_PARTNER_DROPPED_URL;
                 } else {
                     alert('DEV MODE: Partner dropped before sending any messages. Would redirect to Prolific partner-dropped URL.');
                 }
-            };
+            });
             return;
         }
 
