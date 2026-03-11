@@ -592,10 +592,8 @@ document.addEventListener('DOMContentLoaded', () => {
                     chatInputContainer.style.display = 'none';
                     timerDisplay.style.display = 'none';
 
-                    // Show modal explaining time is up
-                    witnessEndTitle.textContent = 'Time Expired';
-                    witnessEndMessage.textContent = 'The conversation time limit has been reached. Thank you for your participation!';
-                    witnessEndModal.style.display = 'flex';
+                    // Go straight to binary choice (no modal)
+                    showWitnessBinaryChoice('time_expired');
                 } else {
                     // Interrogator flow
                     updateTimerMessage();
@@ -1743,14 +1741,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
             logToRailway({
                 type: 'WITNESS_SEES_PARTNER_COMPLETED',
-                message: 'Witness shown modal - interrogator completed study',
+                message: 'Witness routed to binary choice - interrogator completed study',
                 context: { role: currentRole }
             });
 
-            // Show modal explaining what happened
-            witnessEndTitle.textContent = 'Study Complete';
-            witnessEndMessage.textContent = 'Your conversation partner has finished the study. Thank you for your participation!';
-            witnessEndModal.style.display = 'flex';
+            // Go straight to binary choice (no modal)
+            showWitnessBinaryChoice('partner_completed');
         } else {
             // This shouldn't happen for interrogators (they trigger their own completion)
             logToRailway({
@@ -1853,13 +1849,20 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 // Record timeout to database
                 recordTimeoutToDatabase('partner_timeout_exceeded_total_wait');
-
                 recordCompletionCode('C19WFTZR');
-                if (isProduction) {
-                    window.location.href = PROLIFIC_PARTNER_DROPPED_URL;
-                } else {
-                    alert('DEV MODE: Partner dropped, exceeded total wait time, and no partner messages received. Would redirect to Prolific partner-dropped URL.');
-                }
+
+                // Show popup explaining what happened before redirecting
+                witnessEndTitle.textContent = 'Study Ended';
+                witnessEndMessage.textContent = 'Unfortunately, your conversation partner disconnected before the conversation could begin and we were unable to find a new match. Thank you for your time — you will be redirected shortly.';
+                witnessEndModal.style.display = 'flex';
+                witnessEndContinueButton.textContent = 'Continue';
+                witnessEndContinueButton.onclick = () => {
+                    if (isProduction) {
+                        window.location.href = PROLIFIC_PARTNER_DROPPED_URL;
+                    } else {
+                        alert('DEV MODE: Partner dropped, exceeded total wait time. Would redirect to Prolific partner-dropped URL.');
+                    }
+                };
                 return;
             }
 
@@ -1892,13 +1895,20 @@ document.addEventListener('DOMContentLoaded', () => {
 
             // Record timeout to database
             recordTimeoutToDatabase('partner_timeout_no_messages');
-
             recordCompletionCode('C19WFTZR');
-            if (isProduction) {
-                window.location.href = PROLIFIC_PARTNER_DROPPED_URL;
-            } else {
-                alert('DEV MODE: Partner dropped before sending any messages. Would redirect to Prolific partner-dropped URL.');
-            }
+
+            // Show popup explaining what happened before redirecting
+            witnessEndTitle.textContent = 'Study Ended';
+            witnessEndMessage.textContent = 'Unfortunately, your conversation partner disconnected before the conversation could begin. Thank you for your time — you will be redirected shortly.';
+            witnessEndModal.style.display = 'flex';
+            witnessEndContinueButton.textContent = 'Continue';
+            witnessEndContinueButton.onclick = () => {
+                if (isProduction) {
+                    window.location.href = PROLIFIC_PARTNER_DROPPED_URL;
+                } else {
+                    alert('DEV MODE: Partner dropped before sending any messages. Would redirect to Prolific partner-dropped URL.');
+                }
+            };
             return;
         }
 
@@ -1918,18 +1928,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
             logToRailway({
                 type: 'WITNESS_SEES_PARTNER_DROPOUT',
-                message: 'Witness shown modal immediately - partner was inactive/dropped',
+                message: 'Witness routed to binary choice - partner was inactive/dropped',
                 context: { role: currentRole }
             });
 
-            // Show modal explaining what happened - different message based on reason
-            witnessEndTitle.textContent = 'Study Ended';
-            if (reason === 'left') {
-                witnessEndMessage.textContent = 'Your conversation partner has disconnected. The study has ended. Thank you for your participation!';
-            } else {
-                witnessEndMessage.textContent = 'Your conversation partner was inactive for too long. The study has ended. Thank you for your participation!';
-            }
-            witnessEndModal.style.display = 'flex';
+            // Go straight to binary choice (no modal)
+            showWitnessBinaryChoice(`partner_dropped_${reason}`);
 
         } else {
             // INTERROGATOR: Route to completion flow automatically
@@ -2426,28 +2430,52 @@ Thank you again for your participation!
         }
     });
 
-    // NEW: Witness modal continue button - route to binary choice + comment + debrief
-    witnessEndContinueButton.addEventListener('click', () => {
-        logUiEvent('witness_modal_continue_clicked');
+    // Route witness directly to binary choice (no modal)
+    function showWitnessBinaryChoice(reason) {
+        logUiEvent('witness_routed_to_binary_choice', { reason });
 
         logToRailway({
-            type: 'WITNESS_MODAL_CONTINUE_CLICKED',
-            message: 'Witness clicked continue on end modal - routing to binary choice',
-            context: { role: currentRole, turn: currentTurn }
+            type: 'WITNESS_ROUTED_TO_BINARY_CHOICE',
+            message: `Witness routed to binary choice - reason: ${reason}`,
+            context: { role: currentRole, turn: currentTurn, reason }
         });
 
-        // Hide modal
-        witnessEndModal.style.display = 'none';
-
-        // NEW: Show binary choice UI for witness (same as interrogator but no confidence slider)
-        // Witness needs to make final judgment: was partner human or AI?
+        // Show binary choice UI for witness
         showMainPhase('chat_and_assessment_flow');
 
-        // CRITICAL FIX: Don't hide chatInterfaceDiv - assessmentAreaDiv is INSIDE it!
-        // Instead, hide just the chat-specific elements and show the assessment
+        // Hide chat-specific elements, show assessment
         const chatWindow = document.querySelector('.chat-window');
         if (chatWindow) chatWindow.style.display = 'none';
         chatInputContainer.style.display = 'none';
+
+        // Hide the style header — witness is done chatting
+        const conversationHeader = document.getElementById('conversation-header');
+        if (conversationHeader) {
+            conversationHeader.style.display = 'none';
+            conversationHeader.innerHTML = '';
+        }
+
+        // Show context message for partner dropout/completion (not for timer expired)
+        let contextMessage = '';
+        if (reason === 'partner_dropped_left') {
+            contextMessage = 'Your conversation partner has disconnected. The study has ended. You will now be routed to finish the study.';
+        } else if (reason === 'partner_dropped_timeout') {
+            contextMessage = 'Your conversation partner was inactive for too long. The study has ended. You will now be routed to finish the study.';
+        } else if (reason === 'partner_completed') {
+            contextMessage = 'The conversation has completed. Please indicate whether you believe your partner was Human or AI below.';
+        }
+
+        // Remove any previous context message
+        const existingMsg = document.getElementById('witness-end-context-message');
+        if (existingMsg) existingMsg.remove();
+
+        if (contextMessage) {
+            const msgDiv = document.createElement('div');
+            msgDiv.id = 'witness-end-context-message';
+            msgDiv.style.cssText = 'text-align: center; padding: 12px; margin-bottom: 15px; background: #f8f9fa; border-radius: 6px; color: #333;';
+            msgDiv.textContent = contextMessage;
+            assessmentAreaDiv.insertBefore(msgDiv, assessmentAreaDiv.firstChild);
+        }
 
         // Show assessment area and its content
         assessmentAreaDiv.style.display = 'block';
@@ -2456,17 +2484,16 @@ Thank you again for your participation!
         // Reset binary choice state
         binaryChoice = null;
         binaryChoiceStartTime = Date.now();
-        binaryChoiceInProgress = false; // Reset double-click protection
+        binaryChoiceInProgress = false;
 
         // Show binary choice buttons and enable them
         binaryChoiceSection.style.display = 'block';
         confidenceSection.style.display = 'none';
 
-        // Ensure binary choice buttons are enabled
         choiceHumanButton.disabled = false;
         choiceAiButton.disabled = false;
 
-        // Update prompt for witness - more detailed since this is their only judgment
+        // Update prompt for witness
         const binaryPrompt = document.getElementById('binary-choice-prompt');
         if (binaryPrompt) {
             binaryPrompt.textContent = 'Now that you have finished chatting with your partner, please tell us whether you believe your partner was a Human or an AI by selecting one of the buttons below:';
@@ -2485,15 +2512,19 @@ Thank you again for your participation!
                 message: 'Witness final response timed out - auto-selecting and proceeding',
                 context: { role: currentRole }
             });
-            // Auto-select "human" (or we could randomly pick) and proceed
             if (!binaryChoice) {
-                binaryChoice = 'human'; // Default selection on timeout
+                binaryChoice = 'human';
                 binaryChoiceTime = Date.now() - binaryChoiceStartTime;
             }
-            // Route to feedback
             showMainPhase('feedback');
             feedbackTextarea.focus();
         });
+    }
+
+    // Keep modal button as fallback (shouldn't be needed now)
+    witnessEndContinueButton.addEventListener('click', () => {
+        witnessEndModal.style.display = 'none';
+        showWitnessBinaryChoice('modal_continue');
 
         logToRailway({
             type: 'WITNESS_BINARY_CHOICE_SHOWN',
