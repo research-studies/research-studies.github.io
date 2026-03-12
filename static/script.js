@@ -782,7 +782,7 @@ document.addEventListener('DOMContentLoaded', () => {
             // 2 minute timeout for pre-demo instructions
             startScreenTimer(SCREEN_TIMEOUT_MS, 'instructions', redirectToProlificTimeout);
         }
-        else if (phase === 'initial') {
+        else if (phase === 'demographics') {
             initialSetupDiv.style.display = 'block';
             // 2 minute timeout for demographics
             startScreenTimer(SCREEN_TIMEOUT_MS, 'demographics', redirectToProlificTimeout);
@@ -823,12 +823,12 @@ document.addEventListener('DOMContentLoaded', () => {
         });
 
         // Simulate clicking the submit button (or just proceed to next phase)
-        // If there's feedback text, submit it; otherwise just proceed
+        // If there's feedback text, submit it; otherwise just proceed to demographics
         if (submitFeedbackButton && !submitFeedbackButton.disabled) {
             submitFeedbackButton.click();
         } else {
-            // No submit button or already disabled - go to debrief directly
-            showMainPhase('final');
+            // No submit button or already disabled - go to demographics
+            showMainPhase('demographics');
         }
     }
 
@@ -2192,7 +2192,7 @@ If you agree to participate, you will:
 - Determine if you're talking to a human or an AI each turn
 - Rate your confidence about whether you believe you are talking to a human or an AI using a sliding scale (0 = definitely human, 1 = definitely AI)
 - Provide a comment about your experience at the end of the conversation
-- Complete a brief demographic questionnaire at the beginning
+- Complete a brief demographic questionnaire at the end
 - The total time commitment will be approximately 15 minutes
 - You are free to share information as you see fit during the conversation but should not share more than you would be willing to share with a stranger
 
@@ -2255,7 +2255,7 @@ If you agree to participate, you will:
 - Engage in a text-based conversation with another person
 - Emulate an assigned conversation style throughout your conversation
 - Provide a comment about your experience at the end of the conversation
-- Complete a brief demographic questionnaire at the beginning
+- Complete a brief demographic questionnaire at the end
 - The total time commitment will be approximately 15 minutes
 - You are free to share information as you see fit during the conversation but should not share more than you would be willing to share with a stranger
 
@@ -2656,16 +2656,75 @@ Thank you again for your participation!
         });
     }
 
-    confirmInstructionsButton.addEventListener('click', () => {
+    confirmInstructionsButton.addEventListener('click', async () => {
         logUiEvent('instructions_understand_clicked', { finalPage: currentInstructionPage });
-        // Skip the demographics modal, go directly to demographics page
-        showMainPhase('initial');
+        confirmInstructionsButton.disabled = true;
+
+        try {
+            // Initialize study (without demographics - those come after the conversation)
+            const data = {
+                participant_id: participantId,
+                prolific_pid: prolificPid,
+                role: assignedRole,
+                social_style: assignedSocialStyle
+            };
+
+            const response = await fetch('/initialize_study', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(data),
+            });
+            const result = await response.json();
+
+            if (!response.ok) {
+                throw new Error(result.detail || 'Failed to initialize study.');
+            }
+
+            sessionId = result.session_id;
+            localStorage.setItem('sessionId', sessionId);
+            currentTurn = 0;
+            messageList.innerHTML = '';
+
+            // Attach beforeunload if not already attached
+            if (isProduction && handleEarlyExit && !earlyExitAttached) {
+                window.addEventListener('beforeunload', handleEarlyExit);
+                window.addEventListener('unload', handleActualExit);
+                earlyExitAttached = true;
+            }
+
+            // Determine AI vs human mode
+            await enterWaitingRoom();
+
+            // Show post-demo instructions with role assignment
+            if (isHumanPartner) {
+                currentRole = assignedRole;
+
+                if (currentRole === 'witness' && assignedSocialStyle) {
+                    witnessStyleNameSpan.textContent = assignedSocialStyle;
+                    if (witnessStyleName2Span) witnessStyleName2Span.textContent = assignedSocialStyle;
+                    witnessStyleDescriptionP.textContent = assignedSocialStyleDescription || '';
+                }
+
+                showRoleAssignment(currentRole);
+            } else {
+                currentRole = 'interrogator';
+                showRoleAssignment('interrogator');
+            }
+        } catch (error) {
+            logToRailway({
+                type: 'INITIALIZATION_ERROR',
+                message: `Study initialization failed: ${error.message}`,
+                context: { error: error }
+            });
+            confirmInstructionsButton.disabled = false;
+            showError('Failed to initialize study. Please refresh and try again.');
+        }
     });
 
     modalContinueButton.addEventListener('click', () => {
         logUiEvent('demographics_modal_continue_clicked');
-        demographicsModal.style.display = 'none'; // Hide the modal
-        showMainPhase('initial'); // Now, show the demographics page
+        demographicsModal.style.display = 'none';
+        // Demographics modal no longer needed - demographics moved to after conversation
     });
 
     // Post-demographics instruction pagination navigation
@@ -2701,15 +2760,15 @@ Thank you again for your participation!
     // --- Event Listeners ---
     // handleEarlyExit already declared above, no need to redeclare
 
-    initialForm.addEventListener('submit', async (e) => {
+    initialForm.addEventListener(‘submit’, async (e) => {
         e.preventDefault();
-        logUiEvent('initial_form_begin_conversation_clicked');
+        logUiEvent(‘demographics_form_submitted’);
 
-        // Pre-validate and build data before locking UI or opening modals
+        // Pre-validate and build data before submitting
         const formData = new FormData(initialForm);
 
         // Validate required Likert bubbles
-        const requiredLikerts = ['self_detection_speed', 'others_detection_speed', 'ai_capabilities_rating', 'trust_in_ai'];
+        const requiredLikerts = [‘self_detection_speed’, ‘others_detection_speed’, ‘ai_capabilities_rating’, ‘trust_in_ai’];
         for (const field of requiredLikerts) {
             if (!formData.get(field)) {
                 showError("Please select a value for all rating questions.");
@@ -2718,28 +2777,27 @@ Thank you again for your participation!
         }
 
         // Validate AI usage frequency and models
-        const ai_usage_frequency_val = formData.get('ai_usage_frequency');
+        const ai_usage_frequency_val = formData.get(‘ai_usage_frequency’);
         if (!ai_usage_frequency_val) {
             showError("Please select your AI usage frequency.");
             return;
         }
-        const ai_models_used_vals = formData.getAll('ai_models_used');
-        if (ai_usage_frequency_val !== '0' && ai_models_used_vals.length === 0) {
+        const ai_models_used_vals = formData.getAll(‘ai_models_used’);
+        if (ai_usage_frequency_val !== ‘0’ && ai_models_used_vals.length === 0) {
             showError("Since you use AI chatbots, please select at least one model you have used.");
             return;
         }
-        if (ai_usage_frequency_val === '0' && ai_models_used_vals.length > 0) {
-            showError("You selected 'Never' for AI usage, but also selected specific models. Please correct your selection.");
+        if (ai_usage_frequency_val === ‘0’ && ai_models_used_vals.length > 0) {
+            showError("You selected ‘Never’ for AI usage, but also selected specific models. Please correct your selection.");
             return;
         }
 
         // Validate demographics
-        const ageStr = formData.get('age');
-        const genderVal = formData.get('gender');
-        const educationVal = formData.get('education');
-        const incomeVal = formData.get('income');
-        const ethnicityVals = formData.getAll('ethnicity');  // ADD THIS LINE
-
+        const ageStr = formData.get(‘age’);
+        const genderVal = formData.get(‘gender’);
+        const educationVal = formData.get(‘education’);
+        const incomeVal = formData.get(‘income’);
+        const ethnicityVals = formData.getAll(‘ethnicity’);
 
         const ageNum = parseInt(ageStr, 10);
         if (!ageStr || Number.isNaN(ageNum) || ageNum < 18 || ageNum > 100) {
@@ -2764,149 +2822,94 @@ Thank you again for your participation!
         }
 
         // Validate new demographics
-        const politicalAffiliationVal = formData.get('political_affiliation');
+        const politicalAffiliationVal = formData.get(‘political_affiliation’);
         if (!politicalAffiliationVal) {
             showError("Please select your political affiliation.");
             return;
         }
-        const socialMediaVals = formData.getAll('social_media');
+        const socialMediaVals = formData.getAll(‘social_media’);
         if (socialMediaVals.length === 0) {
-            showError("Please select at least one social media platform option (or 'None').");
+            showError("Please select at least one social media platform option (or ‘None’).");
             return;
         }
-        // Enforce 'None' as an exclusive selection
-        if (socialMediaVals.includes('none') && socialMediaVals.length > 1) {
-            showError("If you select 'None', please don’t select other platforms.");
+        // Enforce ‘None’ as an exclusive selection
+        if (socialMediaVals.includes(‘none’) && socialMediaVals.length > 1) {
+            showError("If you select ‘None’, please don’t select other platforms.");
             return;
         }
-        const internetUsageVal = formData.get('internet_usage_per_week');
+        const internetUsageVal = formData.get(‘internet_usage_per_week’);
         if (!internetUsageVal) {
             showError("Please select your hours of internet use per week.");
             return;
         }
 
         const data = {
+            session_id: sessionId,
             ai_usage_frequency: parseInt(ai_usage_frequency_val, 10),
             ai_models_used: ai_models_used_vals,
-            self_detection_speed: parseInt(formData.get('self_detection_speed'), 10),
-            others_detection_speed: parseInt(formData.get('others_detection_speed'), 10),
-            ai_capabilities_rating: parseInt(formData.get('ai_capabilities_rating'), 10),
-            trust_in_ai: parseInt(formData.get('trust_in_ai'), 10),
+            self_detection_speed: parseInt(formData.get(‘self_detection_speed’), 10),
+            others_detection_speed: parseInt(formData.get(‘others_detection_speed’), 10),
+            ai_capabilities_rating: parseInt(formData.get(‘ai_capabilities_rating’), 10),
+            trust_in_ai: parseInt(formData.get(‘trust_in_ai’), 10),
             age: ageNum,
             gender: genderVal,
             education: educationVal,
-            ethnicity: formData.getAll('ethnicity'),
+            ethnicity: formData.getAll(‘ethnicity’),
             income: incomeVal,
             political_affiliation: politicalAffiliationVal,
             social_media_platforms: socialMediaVals,
-            internet_usage_per_week: parseInt(internetUsageVal, 10),
-            // Identifiers
-            participant_id: participantId,
-            prolific_pid: prolificPid,
-            // NEW: Pre-assigned role and social style (from /get_or_assign_role)
-            role: assignedRole,
-            social_style: assignedSocialStyle
+            internet_usage_per_week: parseInt(internetUsageVal, 10)
         };
 
-        // Reset state flags for this attempt
-        isBackendReady = false;
-        isUserReady = false;
-        logToRailway({
-            type: 'FORM_SUBMITTED_FLAGS_RESET',
-            message: 'Form submitted - reset flags to false',
-            context: { isBackendReady, isUserReady }
-        });
-
-        // Disable form while initializing
-        initialForm.querySelector('button').disabled = true;
+        // Disable form while submitting
+        initialForm.querySelector(‘button’).disabled = true;
         setInitialFormControlsDisabled(true);
 
         logToRailway({
-            type: 'FORM_SUBMITTED_INITIALIZING',
-            message: 'Form submitted - initializing study directly (no modal)',
-            context: {}
+            type: ‘DEMOGRAPHICS_SUBMITTING’,
+            message: ‘Submitting demographics after conversation’,
+            context: { session_id: sessionId }
         });
 
-        // Perform initialization directly (skip modal)
         try {
-            const response = await fetch('/initialize_study', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+            const response = await fetch(‘/submit_demographics’, {
+                method: ‘POST’,
+                headers: { ‘Content-Type’: ‘application/json’ },
                 body: JSON.stringify(data),
             });
             const result = await response.json();
 
             if (!response.ok) {
-                throw new Error(getApiErrorMessage(result, 'Failed to initialize study.'));
+                throw new Error(result.detail || ‘Failed to submit demographics.’);
             }
 
-            sessionId = result.session_id;
-            localStorage.setItem('sessionId', sessionId);
-            currentTurn = 0;
-            messageList.innerHTML = '';
+            logToRailway({
+                type: ‘DEMOGRAPHICS_SUBMITTED_SUCCESS’,
+                message: ‘Demographics submitted - routing to debrief’,
+                context: { role: currentRole }
+            });
 
-            // Attach beforeunload if not already attached (may have been attached at consent)
-            if (isProduction && !earlyExitAttached) {
-                window.addEventListener('beforeunload', handleEarlyExit);
-                window.addEventListener('unload', handleActualExit);
-                earlyExitAttached = true;
-            }
-
-            // Determine AI vs human mode
-            await enterWaitingRoom();
-
-            // Show 3-page post-demo instructions
-            // FIX: Do NOT call /join_waiting_room here - that marks user as "waiting" prematurely
-            // Role was already assigned via /get_or_assign_role at page load (stored in assignedRole)
-            // /join_waiting_room will be called when user clicks "Enter Waiting Room" button
-            if (isHumanPartner) {
-                // Use pre-assigned role (from /get_or_assign_role at page load)
-                currentRole = assignedRole;
-
-                if (currentRole === 'witness' && assignedSocialStyle) {
-                    witnessStyleNameSpan.textContent = assignedSocialStyle;
-                    if (witnessStyleName2Span) witnessStyleName2Span.textContent = assignedSocialStyle;
-                    witnessStyleDescriptionP.textContent = assignedSocialStyleDescription || '';
-
-                    logToRailway({
-                        type: 'WITNESS_SOCIAL_STYLE_ASSIGNED',
-                        message: 'Witness assigned social style',
-                        context: {
-                            style: assignedSocialStyle,
-                            description: assignedSocialStyleDescription
-                        }
-                    });
-                }
-
-                logToRailway({
-                    type: 'ROLE_ASSIGNED_SHOWING_POST_DEMO_INSTRUCTIONS',
-                    message: 'Role assigned - showing 3-page post-demo instructions (NOT yet in waiting room)',
-                    context: { role: currentRole }
-                });
-
-                showRoleAssignment(currentRole);
+            // Proceed to debrief
+            showMainPhase(‘final’);
+            if (currentRole === ‘witness’ || !finalSummaryData) {
+                // Witness or no summary data: show debrief directly
+                debriefPhaseDiv.style.display = ‘block’;
+                summaryPhaseDiv.style.display = ‘none’;
             } else {
-                currentRole = 'interrogator';
-
-                logToRailway({
-                    type: 'AI_MODE_SHOWING_POST_DEMO_INSTRUCTIONS',
-                    message: 'AI mode - showing 3-page post-demo instructions',
-                    context: { role: currentRole }
-                });
-
-                showRoleAssignment('interrogator');
+                // Interrogator with summary data: show summary + debrief
+                displayFinalPage(finalSummaryData);
             }
 
         } catch (error) {
             logToRailway({
-                type: 'INITIALIZATION_ERROR',
-                message: `Study initialization failed: ${error.message}`,
+                type: ‘DEMOGRAPHICS_SUBMIT_ERROR’,
+                message: `Demographics submission failed: ${error.message}`,
                 context: { error: error }
             });
-            const formButton = initialForm.querySelector('button');
+            const formButton = initialForm.querySelector(‘button’);
             if (formButton) formButton.disabled = false;
             setInitialFormControlsDisabled(false);
-            showError('Failed to initialize study. Please refresh and try again.');
+            showError(‘Failed to submit demographics. Please try again.’);
         }
     });
     
@@ -3982,36 +3985,13 @@ Thank you again for your participation!
             });
         }
 
-        // NEW: Check if witness - route to debrief instead of summary
-        if (currentRole === 'witness') {
-            // Witness: Go straight to debrief form
-            showMainPhase('final');
-            debriefPhaseDiv.style.display = 'block';
-            summaryPhaseDiv.style.display = 'none';
-
-            logToRailway({
-                type: 'WITNESS_ROUTED_TO_DEBRIEF_AFTER_COMMENT',
-                message: 'Witness submitted comment, routing to debrief',
-                context: { role: currentRole }
-            });
-        } else {
-            // Interrogator: Proceed to summary page
-            showMainPhase('final');
-            if (finalSummaryData) {
-                displayFinalPage(finalSummaryData);
-            } else {
-                // Partner dropped before study_over — no summary data available
-                // Skip summary, go straight to debrief
-                debriefPhaseDiv.style.display = 'block';
-                summaryPhaseDiv.style.display = 'none';
-
-                logToRailway({
-                    type: 'INTERROGATOR_SKIPPED_SUMMARY_NO_DATA',
-                    message: 'Partner dropped - no summary data, routing interrogator to debrief',
-                    context: { role: currentRole, partnerDropped: partnerDroppedFlag }
-                });
-            }
-        }
+        // Route to demographics form (moved from pre-study to post-feedback)
+        logToRailway({
+            type: 'FEEDBACK_SUBMITTED_ROUTING_TO_DEMOGRAPHICS',
+            message: 'Feedback submitted - routing to demographics form',
+            context: { role: currentRole }
+        });
+        showMainPhase('demographics');
     });
 
     // Skip button removed - feedback is now mandatory for interrogators
