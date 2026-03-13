@@ -2760,15 +2760,15 @@ Thank you again for your participation!
     // --- Event Listeners ---
     // handleEarlyExit already declared above, no need to redeclare
 
-    initialForm.addEventListener(‘submit’, async (e) => {
+    initialForm.addEventListener('submit', async (e) => {
         e.preventDefault();
-        logUiEvent(‘demographics_form_submitted’);
+        logUiEvent('demographics_form_submitted');
 
         // Pre-validate and build data before submitting
         const formData = new FormData(initialForm);
 
         // Validate required Likert bubbles
-        const requiredLikerts = [‘self_detection_speed’, ‘others_detection_speed’, ‘ai_capabilities_rating’, ‘trust_in_ai’];
+        const requiredLikerts = ['self_detection_speed', 'others_detection_speed', 'ai_capabilities_rating', 'trust_in_ai'];
         for (const field of requiredLikerts) {
             if (!formData.get(field)) {
                 showError("Please select a value for all rating questions.");
@@ -2777,27 +2777,27 @@ Thank you again for your participation!
         }
 
         // Validate AI usage frequency and models
-        const ai_usage_frequency_val = formData.get(‘ai_usage_frequency’);
+        const ai_usage_frequency_val = formData.get('ai_usage_frequency');
         if (!ai_usage_frequency_val) {
             showError("Please select your AI usage frequency.");
             return;
         }
-        const ai_models_used_vals = formData.getAll(‘ai_models_used’);
-        if (ai_usage_frequency_val !== ‘0’ && ai_models_used_vals.length === 0) {
+        const ai_models_used_vals = formData.getAll('ai_models_used');
+        if (ai_usage_frequency_val !== '0' && ai_models_used_vals.length === 0) {
             showError("Since you use AI chatbots, please select at least one model you have used.");
             return;
         }
-        if (ai_usage_frequency_val === ‘0’ && ai_models_used_vals.length > 0) {
-            showError("You selected ‘Never’ for AI usage, but also selected specific models. Please correct your selection.");
+        if (ai_usage_frequency_val === '0' && ai_models_used_vals.length > 0) {
+            showError("You selected 'Never' for AI usage, but also selected specific models. Please correct your selection.");
             return;
         }
 
         // Validate demographics
-        const ageStr = formData.get(‘age’);
-        const genderVal = formData.get(‘gender’);
-        const educationVal = formData.get(‘education’);
-        const incomeVal = formData.get(‘income’);
-        const ethnicityVals = formData.getAll(‘ethnicity’);
+        const ageStr = formData.get('age');
+        const genderVal = formData.get('gender');
+        const educationVal = formData.get('education');
+        const incomeVal = formData.get('income');
+        const ethnicityVals = formData.getAll('ethnicity');
 
         const ageNum = parseInt(ageStr, 10);
         if (!ageStr || Number.isNaN(ageNum) || ageNum < 18 || ageNum > 100) {
@@ -2822,22 +2822,22 @@ Thank you again for your participation!
         }
 
         // Validate new demographics
-        const politicalAffiliationVal = formData.get(‘political_affiliation’);
+        const politicalAffiliationVal = formData.get('political_affiliation');
         if (!politicalAffiliationVal) {
             showError("Please select your political affiliation.");
             return;
         }
-        const socialMediaVals = formData.getAll(‘social_media’);
+        const socialMediaVals = formData.getAll('social_media');
         if (socialMediaVals.length === 0) {
-            showError("Please select at least one social media platform option (or ‘None’).");
+            showError("Please select at least one social media platform option (or 'None').");
             return;
         }
-        // Enforce ‘None’ as an exclusive selection
-        if (socialMediaVals.includes(‘none’) && socialMediaVals.length > 1) {
-            showError("If you select ‘None’, please don’t select other platforms.");
+        // Enforce 'None' as an exclusive selection
+        if (socialMediaVals.includes('none') && socialMediaVals.length > 1) {
+            showError("If you select 'None', please don't select other platforms.");
             return;
         }
-        const internetUsageVal = formData.get(‘internet_usage_per_week’);
+        const internetUsageVal = formData.get('internet_usage_per_week');
         if (!internetUsageVal) {
             showError("Please select your hours of internet use per week.");
             return;
@@ -2847,14 +2847,14 @@ Thank you again for your participation!
             session_id: sessionId,
             ai_usage_frequency: parseInt(ai_usage_frequency_val, 10),
             ai_models_used: ai_models_used_vals,
-            self_detection_speed: parseInt(formData.get(‘self_detection_speed’), 10),
-            others_detection_speed: parseInt(formData.get(‘others_detection_speed’), 10),
-            ai_capabilities_rating: parseInt(formData.get(‘ai_capabilities_rating’), 10),
-            trust_in_ai: parseInt(formData.get(‘trust_in_ai’), 10),
+            self_detection_speed: parseInt(formData.get('self_detection_speed'), 10),
+            others_detection_speed: parseInt(formData.get('others_detection_speed'), 10),
+            ai_capabilities_rating: parseInt(formData.get('ai_capabilities_rating'), 10),
+            trust_in_ai: parseInt(formData.get('trust_in_ai'), 10),
             age: ageNum,
             gender: genderVal,
             education: educationVal,
-            ethnicity: formData.getAll(‘ethnicity’),
+            ethnicity: formData.getAll('ethnicity'),
             income: incomeVal,
             political_affiliation: politicalAffiliationVal,
             social_media_platforms: socialMediaVals,
@@ -2862,39 +2862,39 @@ Thank you again for your participation!
         };
 
         // Disable form while submitting
-        initialForm.querySelector(‘button’).disabled = true;
+        initialForm.querySelector('button').disabled = true;
         setInitialFormControlsDisabled(true);
 
         logToRailway({
-            type: ‘DEMOGRAPHICS_SUBMITTING’,
-            message: ‘Submitting demographics after conversation’,
+            type: 'DEMOGRAPHICS_SUBMITTING',
+            message: 'Submitting demographics after conversation',
             context: { session_id: sessionId }
         });
 
         try {
-            const response = await fetch(‘/submit_demographics’, {
-                method: ‘POST’,
-                headers: { ‘Content-Type’: ‘application/json’ },
+            const response = await fetch('/submit_demographics', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(data),
             });
             const result = await response.json();
 
             if (!response.ok) {
-                throw new Error(result.detail || ‘Failed to submit demographics.’);
+                throw new Error(result.detail || 'Failed to submit demographics.');
             }
 
             logToRailway({
-                type: ‘DEMOGRAPHICS_SUBMITTED_SUCCESS’,
-                message: ‘Demographics submitted - routing to debrief’,
+                type: 'DEMOGRAPHICS_SUBMITTED_SUCCESS',
+                message: 'Demographics submitted - routing to debrief',
                 context: { role: currentRole }
             });
 
             // Proceed to debrief
-            showMainPhase(‘final’);
-            if (currentRole === ‘witness’ || !finalSummaryData) {
+            showMainPhase('final');
+            if (currentRole === 'witness' || !finalSummaryData) {
                 // Witness or no summary data: show debrief directly
-                debriefPhaseDiv.style.display = ‘block’;
-                summaryPhaseDiv.style.display = ‘none’;
+                debriefPhaseDiv.style.display = 'block';
+                summaryPhaseDiv.style.display = 'none';
             } else {
                 // Interrogator with summary data: show summary + debrief
                 displayFinalPage(finalSummaryData);
@@ -2902,14 +2902,14 @@ Thank you again for your participation!
 
         } catch (error) {
             logToRailway({
-                type: ‘DEMOGRAPHICS_SUBMIT_ERROR’,
+                type: 'DEMOGRAPHICS_SUBMIT_ERROR',
                 message: `Demographics submission failed: ${error.message}`,
                 context: { error: error }
             });
-            const formButton = initialForm.querySelector(‘button’);
+            const formButton = initialForm.querySelector('button');
             if (formButton) formButton.disabled = false;
             setInitialFormControlsDisabled(false);
-            showError(‘Failed to submit demographics. Please try again.’);
+            showError('Failed to submit demographics. Please try again.');
         }
     });
     
