@@ -808,8 +808,8 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         else if (phase === 'feedback') {
             feedbackPhaseDiv.style.display = 'block';
-            // 2 minute timeout for feedback - auto-submit and continue
-            startScreenTimer(SCREEN_TIMEOUT_MS, 'feedback', autoSubmitFeedback);
+            // 2 minute timeout for feedback — redirect to Prolific on timeout
+            startScreenTimer(SCREEN_TIMEOUT_MS, 'feedback', redirectToProlificTimeout);
         }
         else if (phase === 'final') {
             finalPageDiv.style.display = 'block';
@@ -2524,20 +2524,8 @@ Thank you again for your participation!
             assessmentTitle.textContent = "Your Final Assessment";
         }
 
-        // Start 2-minute timer for witness final response (auto-select if timeout)
-        startScreenTimer(SCREEN_TIMEOUT_MS, 'witness_final_response', () => {
-            logToRailway({
-                type: 'WITNESS_FINAL_RESPONSE_TIMEOUT',
-                message: 'Witness final response timed out - auto-selecting and proceeding',
-                context: { role: currentRole }
-            });
-            if (!binaryChoice) {
-                binaryChoice = 'human';
-                binaryChoiceTime = Date.now() - binaryChoiceStartTime;
-            }
-            showMainPhase('feedback');
-            feedbackTextarea.focus();
-        });
+        // Start 2-minute timer for witness final response — redirect to Prolific on timeout
+        startScreenTimer(SCREEN_TIMEOUT_MS, 'witness_final_response', redirectToProlificTimeout);
     }
 
     // Keep modal button as fallback (shouldn't be needed now)
