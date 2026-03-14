@@ -156,8 +156,11 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
     
-    // Dynamic: uses current origin so the same frontend code works on any Railway deployment
-    const API_BASE_URL = isProduction ? (window.BACKEND_URL || 'https://ai-turing-test-production.up.railway.app') : '';
+    // Route to correct backend based on URL parameter: ?v=1 (human) or ?v=2 (AI)
+    const BACKEND_HUMAN = 'https://ai-turing-test-production.up.railway.app';
+    const BACKEND_AI = 'https://fearless-illumination-production.up.railway.app';
+    const urlVersion = new URLSearchParams(window.location.search).get('v');
+    const API_BASE_URL = isProduction ? (urlVersion === '2' ? BACKEND_AI : BACKEND_HUMAN) : '';
 
     // Monkey-patch fetch so relative paths (starting with "/") hit Railway in production.
     // Local dev (localhost/127.0.0.1) stays unchanged.
