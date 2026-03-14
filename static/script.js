@@ -156,7 +156,8 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
     
-    const API_BASE_URL = isProduction ? 'https://ai-turing-test-production.up.railway.app' : '';
+    // Dynamic: uses current origin so the same frontend code works on any Railway deployment
+    const API_BASE_URL = isProduction ? (window.BACKEND_URL || 'https://ai-turing-test-production.up.railway.app') : '';
 
     // Monkey-patch fetch so relative paths (starting with "/") hit Railway in production.
     // Local dev (localhost/127.0.0.1) stays unchanged.
