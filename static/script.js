@@ -82,6 +82,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const instructionNextBtn = document.getElementById('instruction-next-btn');
     const instructionPageIndicator = document.getElementById('instruction-page-indicator');
     const preDemoStyleNameSpan = document.getElementById('pre-demo-style-name');
+    const preDemoStyleDescriptionSpan = document.getElementById('pre-demo-style-description');
     const preDemoStyleNameRepeatSpans = document.querySelectorAll('.pre-demo-style-name-repeat');
     let currentInstructionPage = 1;
     const totalInstructionPages = 3;
@@ -1048,6 +1049,9 @@ document.addEventListener('DOMContentLoaded', () => {
         if (isWitness && assignedSocialStyle) {
             if (preDemoStyleNameSpan) {
                 preDemoStyleNameSpan.textContent = assignedSocialStyle;
+            }
+            if (preDemoStyleDescriptionSpan && assignedSocialStyleDescription) {
+                preDemoStyleDescriptionSpan.textContent = assignedSocialStyleDescription;
             }
             preDemoStyleNameRepeatSpans.forEach(span => {
                 span.textContent = assignedSocialStyle;
