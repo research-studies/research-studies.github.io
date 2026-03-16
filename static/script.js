@@ -2240,7 +2240,6 @@ document.addEventListener('DOMContentLoaded', () => {
         if (assignedRole === 'interrogator') {
             consentText = `
 CONSENT TO PARTICIPATE IN RESEARCH
-Title of Study: Measuring Real-Time AI Detection
 Principal Investigator: Nykko Vitali (nvitali@fas.harvard.edu)
 Faculty Sponsor: Jason Mitchell
 Participant ID: ${participantId}
@@ -2277,7 +2276,7 @@ Risks and Benefits
 Compensation
 - You will receive compensation equivalent to $8.00 per hour for your participation through the online platform
 - You will be compensated for your time spent on the study if you leave as a result of your partner saying something offensive during the course of the conversation
-- You will be compensated if your time spent on the study if your partner leaves early for any reason
+- You will be compensated for your time spent on the study if your partner leaves early for any reason
 
 Confidentiality
 - Your responses will be stored securely
@@ -2304,7 +2303,6 @@ By clicking "I agree" below, you indicate that:
         } else {
             consentText = `
 CONSENT TO PARTICIPATE IN RESEARCH
-Title of Study: Measuring Real-Time AI Detection
 Principal Investigator: Nykko Vitali (nvitali@fas.harvard.edu)
 Faculty Sponsor: Jason Mitchell
 Participant ID: ${participantId}
@@ -2334,13 +2332,13 @@ Your Rights as a Participant
 - You may not be told everything about the purpose of this research study initially, but you will be fully informed after completion.
 
 Risks and Benefits
-- You may be matched with a human participant, and due to the unpredictable nature of online conversations your conversational partner may use language you consider offensive
-- While there are no direct benefits to you, your participation helps advance our understanding of human-AI interaction and judgment processes
+- You will be matched with a participant, and due to the unpredictable nature of online conversations your conversational partner may use language you consider offensive
+- While there are no direct benefits to you, your participation helps advance our understanding of human interaction and judgment processes
 
 Compensation
 - You will receive compensation equivalent to $8.00 per hour for your participation through the online platform
 - You will be compensated for your time spent on the study if you leave as a result of your partner saying something offensive during the course of the conversation
-- You will be compensated if your time spent on the study if your partner leaves early for any reason
+- You will be compensated for your time spent on the study if your partner leaves early for any reason
 
 Confidentiality
 - Your responses will be stored securely
