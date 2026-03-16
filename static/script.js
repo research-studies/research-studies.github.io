@@ -661,11 +661,99 @@ document.addEventListener('DOMContentLoaded', () => {
                             showError('Time expired! Please complete your confidence assessment to continue.');
                         }
                     } else if (isHumanPartner && waitingForPartner) {
-                        // Human mode: waiting for partner response when timer expired
-                        // Stop polling and show final assessment UI
+                        // Human mode: waiting for partner response when timer expired.
+                        // One check to see if a message exists or is in transit.
+                        fetch(`/check_partner_message?session_id=${sessionId}`)
+                            .then(r => r.json())
+                            .then(result => {
+                                if (result.new_message) {
+                                    // Message ready now — kill poll, display it, show assessment
+                                    if (partnerPollInterval) {
+                                        clearInterval(partnerPollInterval);
+                                        partnerPollInterval = null;
+                                    }
+                                    stopBackgroundDropoutCheck();
+                                    stopIntermittentBubbles();
+                                    chatInputContainer.style.display = 'none';
+
+                                    logToRailway({
+                                        type: 'INTERROGATOR_TIMER_EXPIRED_MESSAGE_FOUND',
+                                        message: 'Timer expired, partner message ready - displaying for final assessment',
+                                        context: { turn: result.turn }
+                                    });
+
+                                    addMessageToUI(result.message_text, 'assistant');
+                                    currentTurn = result.turn;
+                                    waitingForPartner = false;
+                                    typingIndicator.style.display = 'none';
+
+                                    assessmentAreaDiv.style.display = 'block';
+                                    interrogatorRatingUI.style.display = 'block';
+                                    binaryChoice = null;
+                                    binaryChoiceStartTime = Date.now();
+                                    binaryChoiceInProgress = false;
+                                    binaryChoiceSection.style.display = 'block';
+                                    confidenceSection.style.display = 'none';
+                                    choiceHumanButton.disabled = false;
+                                    choiceAiButton.disabled = false;
+
+                                    const assessmentTitle = assessmentAreaDiv.querySelector('h4');
+                                    if (assessmentTitle) {
+                                        assessmentTitle.style.display = 'none';
+                                    }
+                                    updateTimerMessage();
+                                } else if (result.partner_typing) {
+                                    // Message exists but in artificial delay — let existing poll
+                                    // keep running. It will show typing bubbles, deliver the message
+                                    // when delay finishes, and show assessment. timeExpired flag
+                                    // ensures rating submission routes to feedback after.
+                                    logToRailway({
+                                        type: 'INTERROGATOR_TIMER_EXPIRED_MESSAGE_DELAYED',
+                                        message: 'Timer expired, partner message in artificial delay - letting poll deliver it',
+                                        context: { role: currentRole }
+                                    });
+                                } else {
+                                    // No message — partner never sent one. Already rated last message.
+                                    if (partnerPollInterval) {
+                                        clearInterval(partnerPollInterval);
+                                        partnerPollInterval = null;
+                                    }
+                                    stopBackgroundDropoutCheck();
+                                    stopIntermittentBubbles();
+                                    chatInputContainer.style.display = 'none';
+
+                                    logToRailway({
+                                        type: 'INTERROGATOR_TIMER_EXPIRED_NO_MESSAGE',
+                                        message: 'Timer expired, no partner message - routing to feedback',
+                                        context: { role: currentRole }
+                                    });
+
+                                    document.getElementById('timer-display').style.display = 'none';
+                                    showMainPhase('feedback');
+                                    feedbackTextarea.focus();
+                                }
+                            })
+                            .catch(() => {
+                                // Fetch failed — safe fallback: route to feedback
+                                if (partnerPollInterval) {
+                                    clearInterval(partnerPollInterval);
+                                    partnerPollInterval = null;
+                                }
+                                stopBackgroundDropoutCheck();
+                                stopIntermittentBubbles();
+                                chatInputContainer.style.display = 'none';
+                                document.getElementById('timer-display').style.display = 'none';
+                                showMainPhase('feedback');
+                                feedbackTextarea.focus();
+                            });
+                    } else if (isHumanPartner && !waitingForPartner) {
+                        // Human mode: interrogator was composing when timer expired.
+                        // They already assessed the last message they received.
+                        // Witness is already gone — no one to send to, nothing new to assess.
+                        // Route straight to feedback/comment form.
                         logToRailway({
-                            type: 'INTERROGATOR_TIMER_EXPIRED_WAITING',
-                            message: 'Timer expired while waiting for partner - showing final assessment',
+                            type: 'INTERROGATOR_TIMER_EXPIRED_COMPOSING',
+                            message: 'Timer expired while composing in human mode - already assessed last message, routing to feedback',
                             context: { role: currentRole }
                         });
 
@@ -676,32 +764,13 @@ document.addEventListener('DOMContentLoaded', () => {
                         stopBackgroundDropoutCheck();
                         stopIntermittentBubbles();
 
-                        // Hide chat input
                         chatInputContainer.style.display = 'none';
+                        document.getElementById('timer-display').style.display = 'none';
 
-                        // Show final assessment UI
-                        assessmentAreaDiv.style.display = 'block';
-                        interrogatorRatingUI.style.display = 'block';
+                        addSystemMessage("Time's up! Your partner has finished the conversation.");
 
-                        // Reset binary choice state
-                        binaryChoice = null;
-                        binaryChoiceStartTime = Date.now();
-                        binaryChoiceInProgress = false;
-
-                        // Show binary choice, hide confidence
-                        binaryChoiceSection.style.display = 'block';
-                        confidenceSection.style.display = 'none';
-                        choiceHumanButton.disabled = false;
-                        choiceAiButton.disabled = false;
-
-                        // Hide the assessment h4 — the red timer warning is enough
-                        const assessmentTitle = assessmentAreaDiv.querySelector('h4');
-                        if (assessmentTitle) {
-                            assessmentTitle.style.display = 'none';
-                        }
-
-                        // Update timer message now that assessment UI is visible
-                        updateTimerMessage();
+                        showMainPhase('feedback');
+                        feedbackTextarea.focus();
                     }
                 }
             }
