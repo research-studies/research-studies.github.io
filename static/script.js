@@ -125,6 +125,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const PROLIFIC_TIMED_OUT_URL = "https://app.prolific.com/submissions/complete?cc=C1B54A7Q";        // Waiting room timeout (no match)
     const PROLIFIC_PARTNER_DROPPED_URL = "https://app.prolific.com/submissions/complete?cc=C19WFTZR";  // Partner dropped mid-conversation
     const PROLIFIC_ABANDONED_URL = "https://app.prolific.com/submissions/complete?cc=CZSGWT2I";        // Page refresh/abandon
+    const PROLIFIC_POST_STUDY_TIMEOUT_AI_URL = "https://app.prolific.com/submissions/complete?cc=CNEGS1RX";  // Completed conversation but AFK on feedback/demographics (AI witness)
+    const PROLIFIC_POST_STUDY_TIMEOUT_HUMAN_URL = "https://app.prolific.com/submissions/complete?cc=C12UYMCR"; // Completed conversation but AFK on feedback/demographics (human witness)
 
 
     // 2. Production Mode Check
@@ -256,6 +258,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const SCREEN_TIMEOUT_MS = 2 * 60 * 1000;       // 2 minutes for other screens
     const WAITING_ROOM_TIMEOUT_MS = 2 * 60 * 1000; // 2 minutes for waiting room
     const AI_INTERROGATOR_INACTIVITY_MS = 2 * 60 * 1000; // 2 minutes inactivity for AI witness interrogator
+    const POST_STUDY_TIMEOUT_MS = 3 * 60 * 1000;         // 3 minutes for post-study screens (feedback, demographics)
 
     // Track AI interrogator inactivity timer (only used in AI witness mode)
     let aiInactivityTimer = null;
@@ -375,6 +378,20 @@ document.addEventListener('DOMContentLoaded', () => {
             window.location.href = PROLIFIC_COMPLETION_URL;
         } else {
             alert('DEV MODE: Screen timeout - would redirect to Prolific completion URL');
+        }
+    }
+
+    function redirectToProlificPostStudyTimeout() {
+        clearScreenTimer();
+        // Use condition-specific codes so researcher can distinguish in Prolific
+        const isAiCondition = urlVersion === '2';
+        const code = isAiCondition ? 'CNEGS1RX' : 'C12UYMCR';
+        const url = isAiCondition ? PROLIFIC_POST_STUDY_TIMEOUT_AI_URL : PROLIFIC_POST_STUDY_TIMEOUT_HUMAN_URL;
+        recordCompletionCode(code);
+        if (isProduction) {
+            window.location.href = url;
+        } else {
+            alert(`DEV MODE: Post-study timeout (${isAiCondition ? 'AI' : 'human'} condition) - would redirect with code ${code}`);
         }
     }
 
@@ -827,8 +844,8 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         else if (phase === 'demographics') {
             initialSetupDiv.style.display = 'block';
-            // 2 minute timeout for demographics
-            startScreenTimer(SCREEN_TIMEOUT_MS, 'demographics', redirectToProlificTimeout);
+            // 3 minute timeout for demographics — post-study timeout code (they completed the conversation)
+            startScreenTimer(POST_STUDY_TIMEOUT_MS, 'demographics', redirectToProlificPostStudyTimeout);
         }
         else if (phase === 'role-assignment') {
             roleAssignmentPhaseDiv.style.display = 'block';
@@ -847,8 +864,8 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         else if (phase === 'feedback') {
             feedbackPhaseDiv.style.display = 'block';
-            // 2 minute timeout for feedback — redirect to Prolific on timeout
-            startScreenTimer(SCREEN_TIMEOUT_MS, 'feedback', redirectToProlificTimeout);
+            // 3 minute timeout for feedback — auto-submit and advance to demographics
+            startScreenTimer(POST_STUDY_TIMEOUT_MS, 'feedback', autoSubmitFeedback);
         }
         else if (phase === 'final') {
             finalPageDiv.style.display = 'block';
@@ -857,22 +874,30 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    // Auto-submit feedback on timeout
+    // Auto-submit feedback on timeout — saves whatever they typed and advances
     function autoSubmitFeedback() {
+        const feedbackText = feedbackTextarea.value.trim();
         logToRailway({
             type: 'FEEDBACK_AUTO_SUBMIT',
             message: 'Auto-submitting feedback due to timeout',
-            context: { feedback_text: feedbackTextarea.value || '(timeout - no feedback)' }
+            context: { feedback_text: feedbackText || '(timeout - no feedback)', has_text: !!feedbackText }
         });
 
-        // Simulate clicking the submit button (or just proceed to next phase)
-        // If there's feedback text, submit it; otherwise just proceed to demographics
-        if (submitFeedbackButton && !submitFeedbackButton.disabled) {
-            submitFeedbackButton.click();
-        } else {
-            // No submit button or already disabled - go to demographics
-            showMainPhase('demographics');
+        // If they typed something, submit it to the backend (fire-and-forget)
+        if (feedbackText && sessionId) {
+            const payload = { session_id: sessionId, comment: feedbackText };
+            if (currentRole === 'witness' && binaryChoice) {
+                payload.binary_choice = binaryChoice;
+            }
+            fetch('/submit_final_comment', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload),
+            }).catch(() => {}); // Fire-and-forget
         }
+
+        // Advance to demographics regardless
+        showMainPhase('demographics');
     }
 
 
@@ -3965,7 +3990,7 @@ Thank you again for your participation!
                         }
 
                         // Restart 2-min inactivity timer for AI witness interrogator
-                        startAiInactivityTimer();
+                        if (!timeExpired) startAiInactivityTimer();
 
                         // Update timer message for State 3→1 transition (back to chat input)
                         updateTimerMessage();
