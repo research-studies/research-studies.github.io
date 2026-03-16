@@ -257,38 +257,36 @@ document.addEventListener('DOMContentLoaded', () => {
     const CONSENT_TIMEOUT_MS = 3 * 60 * 1000;      // 3 minutes for consent
     const SCREEN_TIMEOUT_MS = 2 * 60 * 1000;       // 2 minutes for other screens
     const WAITING_ROOM_TIMEOUT_MS = 2 * 60 * 1000; // 2 minutes for waiting room
-    const AI_INTERROGATOR_INACTIVITY_MS = 2 * 60 * 1000; // 2 minutes inactivity for AI witness interrogator
+    const CONVERSATION_INACTIVITY_MS = 2 * 60 * 1000; // 2 minutes inactivity for any participant during conversation
     const POST_STUDY_TIMEOUT_MS = 3 * 60 * 1000;         // 3 minutes for post-study screens (feedback, demographics)
 
-    // Track AI interrogator inactivity timer (only used in AI witness mode)
-    let aiInactivityTimer = null;
+    // Track conversation inactivity timer (all participants during conversation)
+    let conversationInactivityTimer = null;
 
-    function startAiInactivityTimer() {
-        // Only for AI witness interrogator during conversation
-        if (isHumanPartner || currentRole !== 'interrogator') return;
-        clearAiInactivityTimer();
-        aiInactivityTimer = setTimeout(() => {
+    function startConversationInactivityTimer() {
+        clearConversationInactivityTimer();
+        conversationInactivityTimer = setTimeout(() => {
             logToRailway({
-                type: 'AI_INTERROGATOR_INACTIVITY_TIMEOUT',
-                message: 'AI interrogator inactive for 2 minutes - redirecting to Prolific',
+                type: 'CONVERSATION_INACTIVITY_TIMEOUT',
+                message: 'Participant inactive for 2 minutes during conversation - redirecting to Prolific',
                 context: { role: currentRole, isHumanPartner }
             });
-            logUiEvent('ai_interrogator_inactivity_timeout');
-            recordTimeoutToDatabase('ai_interrogator_inactivity');
+            logUiEvent('conversation_inactivity_timeout');
+            recordTimeoutToDatabase('conversation_inactivity');
             redirectToProlificTimeout();
-        }, AI_INTERROGATOR_INACTIVITY_MS);
+        }, CONVERSATION_INACTIVITY_MS);
     }
 
-    function resetAiInactivityTimer() {
-        if (aiInactivityTimer) {
-            startAiInactivityTimer();
+    function resetConversationInactivityTimer() {
+        if (conversationInactivityTimer) {
+            startConversationInactivityTimer();
         }
     }
 
-    function clearAiInactivityTimer() {
-        if (aiInactivityTimer) {
-            clearTimeout(aiInactivityTimer);
-            aiInactivityTimer = null;
+    function clearConversationInactivityTimer() {
+        if (conversationInactivityTimer) {
+            clearTimeout(conversationInactivityTimer);
+            conversationInactivityTimer = null;
         }
     }
 
@@ -622,7 +620,7 @@ document.addEventListener('DOMContentLoaded', () => {
             // Time expired
             if (remaining === 0) {
                 clearInterval(studyTimer);
-                clearAiInactivityTimer(); // No longer needed — study timer handles end
+                clearConversationInactivityTimer(); // No longer needed — study timer handles end
                 timeExpired = true;
                 timerDisplay.style.background = 'rgba(220, 53, 69, 0.9)';
                 timerDisplay.style.fontSize = '14px';
@@ -794,7 +792,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     }
 
                     // Start 2-min inactivity timer for AI witness interrogator
-                    startAiInactivityTimer();
+                    startConversationInactivityTimer();
                 } else {
                     // Waiting for witness's first message (shouldn't happen since interrogator always goes first)
                     userMessageInput.disabled = true;
@@ -830,7 +828,7 @@ document.addEventListener('DOMContentLoaded', () => {
         // Clear any existing screen timer when changing phases
         clearScreenTimer();
         // Clear AI interrogator inactivity timer when leaving conversation
-        clearAiInactivityTimer();
+        clearConversationInactivityTimer();
 
         if (phase === 'consent') {
             consentPhaseDiv.style.display = 'block';
@@ -2979,7 +2977,7 @@ Thank you again for your participation!
     let typingSignalTimeout = null;
     userMessageInput.addEventListener('input', () => {
         // Reset inactivity timer on any typing
-        resetAiInactivityTimer();
+        resetConversationInactivityTimer();
 
         // NEW: Track message composition time (for ALL modes - witness and interrogator)
         if (messageCompositionStartTime === null && userMessageInput.value.trim().length > 0) {
@@ -3603,7 +3601,7 @@ Thank you again for your participation!
         if (!messageText || !sessionId) return;
 
         // Clear inactivity timer — user is actively participating
-        clearAiInactivityTimer();
+        clearConversationInactivityTimer();
 
         // NEW: Calculate message composition time
         let messageCompositionTimeSeconds = null;
@@ -3989,7 +3987,7 @@ Thank you again for your participation!
                         }
 
                         // Restart 2-min inactivity timer for AI witness interrogator
-                        if (!timeExpired) startAiInactivityTimer();
+                        if (!timeExpired) startConversationInactivityTimer();
 
                         // Update timer message for State 3→1 transition (back to chat input)
                         updateTimerMessage();
