@@ -568,10 +568,10 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         } else if (typingIndicator.style.display === 'flex') {
             // State 2: Waiting for AI response (typing indicator visible)
-            timeExpiredMessage = 'Time limit reached! Waiting for response, then make final decision.';
+            timeExpiredMessage = 'Time limit reached! Waiting for response, then make a final decision.';
         } else if (chatInputContainer.style.display === 'none') {
             // State 2b: Message sent, waiting for response (typing indicator not yet visible)
-            timeExpiredMessage = 'Time limit reached! Waiting for response, then make final decision.';
+            timeExpiredMessage = 'Time limit reached! Waiting for response, then make a final decision.';
         } else {
             // State 1: Before sending message
             timeExpiredMessage = 'Time limit reached! Please send your message to receive your last response to judge.';
