@@ -3390,7 +3390,8 @@ Thank you again for your participation!
                         session_id: sessionId,
                         message: messageText,
                         typing_indicator_delay_seconds: typingDelaySeconds,
-                        message_composition_time_seconds: messageCompositionTimeSeconds
+                        message_composition_time_seconds: messageCompositionTimeSeconds,
+                        time_remaining_display: document.getElementById('countdown-timer')?.textContent || null
                     }),
                     signal: controller.signal
                 });
