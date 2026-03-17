@@ -133,6 +133,11 @@ document.addEventListener('DOMContentLoaded', () => {
     // 2. Production Mode Check
     const isProduction = (window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1');
 
+    // Flag to suppress the beforeunload/unload abandon handler during intentional redirects
+    // (e.g., timeout, completion, partner drop). Without this, every Prolific redirect
+    // triggers the unload handler which sends CZSGWT2I (abandon) and overwrites the real code.
+    let isIntentionalRedirect = false;
+
     // --- Railway API adapter (add right after `isProduction`) ---
     
     // DEBUG: Railway-only error logging function
@@ -362,6 +367,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function redirectToProlificTimeout() {
         clearScreenTimer();
+        isIntentionalRedirect = true;
         recordCompletionCode('C1B54A7Q');
         if (isProduction) {
             window.location.href = PROLIFIC_TIMED_OUT_URL;
@@ -372,6 +378,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function redirectToProlificCompletion() {
         clearScreenTimer();
+        isIntentionalRedirect = true;
         recordCompletionCode('CR0KFVQO');
         if (isProduction) {
             window.location.href = PROLIFIC_COMPLETION_URL;
@@ -1497,6 +1504,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     recordTimeoutToDatabase(`backend_cleanup_${result.cleanup_reason}`);
 
                     // Redirect to Prolific timeout URL
+                    isIntentionalRedirect = true;
                     recordCompletionCode('C1B54A7Q');
                     if (isProduction) {
                         window.location.href = PROLIFIC_TIMED_OUT_URL;
@@ -1586,6 +1594,7 @@ document.addEventListener('DOMContentLoaded', () => {
         recordTimeoutToDatabase('waiting_room');
 
         // Auto-redirect to Prolific timeout URL (no need to wait for button click)
+        isIntentionalRedirect = true;
         recordCompletionCode('C1B54A7Q');
         if (isProduction) {
             window.location.href = PROLIFIC_TIMED_OUT_URL;
@@ -2003,6 +2012,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 `;
                 document.body.appendChild(overlay2);
                 document.getElementById('partner-dropped-timeout-btn').addEventListener('click', () => {
+                    isIntentionalRedirect = true;
                     if (isProduction) {
                         window.location.href = PROLIFIC_PARTNER_DROPPED_URL;
                     } else {
@@ -2057,6 +2067,7 @@ document.addEventListener('DOMContentLoaded', () => {
             `;
             document.body.appendChild(overlay);
             document.getElementById('partner-dropped-redirect-btn').addEventListener('click', () => {
+                isIntentionalRedirect = true;
                 if (isProduction) {
                     window.location.href = PROLIFIC_PARTNER_DROPPED_URL;
                 } else {
@@ -2456,6 +2467,9 @@ By clicking "I agree" below, you indicate that:
     if (isProduction) {
         // 1. DEFINE the function that will handle premature exits (beforeunload)
         handleEarlyExit = (event) => {
+            // Skip if this is an intentional redirect (timeout, completion, partner drop, etc.)
+            if (isIntentionalRedirect) return;
+
             // Show browser warning dialog
             logUiEvent('navigation_warning_shown', {
                 timestamp: Date.now(),
@@ -2471,6 +2485,9 @@ By clicking "I agree" below, you indicate that:
 
         // 2. DEFINE handler for when they ACTUALLY leave (clicked "Leave" in dialog)
         handleActualExit = () => {
+            // Skip if this is an intentional redirect (timeout, completion, partner drop, etc.)
+            if (isIntentionalRedirect) return;
+
             logToRailway({
                 type: 'USER_ABANDONED_STUDY',
                 message: 'User confirmed navigation away from study',
