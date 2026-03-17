@@ -1582,8 +1582,8 @@ document.addEventListener('DOMContentLoaded', () => {
             context: { role: currentRole }
         });
 
-        // Record timeout to database
-        await recordTimeoutToDatabase('waiting_room');
+        // Fire-and-forget DB record — do NOT await, it can hang and block the redirect
+        recordTimeoutToDatabase('waiting_room');
 
         // Auto-redirect to Prolific timeout URL (no need to wait for button click)
         recordCompletionCode('C1B54A7Q');
