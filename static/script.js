@@ -138,6 +138,14 @@ document.addEventListener('DOMContentLoaded', () => {
     // triggers the unload handler which sends CZSGWT2I (abandon) and overwrites the real code.
     let isIntentionalRedirect = false;
 
+    // Belt-and-suspenders: both set the flag AND remove the event listeners entirely.
+    // Call this before ANY intentional redirect to Prolific.
+    function prepareIntentionalRedirect() {
+        isIntentionalRedirect = true;
+        window.removeEventListener('beforeunload', handleEarlyExit);
+        window.removeEventListener('unload', handleActualExit);
+    }
+
     // --- Railway API adapter (add right after `isProduction`) ---
     
     // DEBUG: Railway-only error logging function
@@ -367,7 +375,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function redirectToProlificTimeout() {
         clearScreenTimer();
-        isIntentionalRedirect = true;
+        prepareIntentionalRedirect();
         recordCompletionCode('C1B54A7Q');
         if (isProduction) {
             window.location.href = PROLIFIC_TIMED_OUT_URL;
@@ -378,7 +386,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function redirectToProlificCompletion() {
         clearScreenTimer();
-        isIntentionalRedirect = true;
+        prepareIntentionalRedirect();
         recordCompletionCode('CR0KFVQO');
         if (isProduction) {
             window.location.href = PROLIFIC_COMPLETION_URL;
@@ -389,6 +397,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function redirectToProlificPostStudyTimeout() {
         clearScreenTimer();
+        prepareIntentionalRedirect();
         // Use condition-specific codes so researcher can distinguish in Prolific
         const isAiCondition = urlVersion === '2';
         const code = isAiCondition ? 'CNEGS1RX' : 'C12UYMCR';
@@ -1504,7 +1513,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     recordTimeoutToDatabase(`backend_cleanup_${result.cleanup_reason}`);
 
                     // Redirect to Prolific timeout URL
-                    isIntentionalRedirect = true;
+                    prepareIntentionalRedirect();
                     recordCompletionCode('C1B54A7Q');
                     if (isProduction) {
                         window.location.href = PROLIFIC_TIMED_OUT_URL;
@@ -1594,7 +1603,7 @@ document.addEventListener('DOMContentLoaded', () => {
         recordTimeoutToDatabase('waiting_room');
 
         // Auto-redirect to Prolific timeout URL (no need to wait for button click)
-        isIntentionalRedirect = true;
+        prepareIntentionalRedirect();
         recordCompletionCode('C1B54A7Q');
         if (isProduction) {
             window.location.href = PROLIFIC_TIMED_OUT_URL;
@@ -2012,7 +2021,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 `;
                 document.body.appendChild(overlay2);
                 document.getElementById('partner-dropped-timeout-btn').addEventListener('click', () => {
-                    isIntentionalRedirect = true;
+                    prepareIntentionalRedirect();
                     if (isProduction) {
                         window.location.href = PROLIFIC_PARTNER_DROPPED_URL;
                     } else {
@@ -2067,7 +2076,7 @@ document.addEventListener('DOMContentLoaded', () => {
             `;
             document.body.appendChild(overlay);
             document.getElementById('partner-dropped-redirect-btn').addEventListener('click', () => {
-                isIntentionalRedirect = true;
+                prepareIntentionalRedirect();
                 if (isProduction) {
                     window.location.href = PROLIFIC_PARTNER_DROPPED_URL;
                 } else {
@@ -2286,6 +2295,7 @@ document.addEventListener('DOMContentLoaded', () => {
         await finalizeNoSession('consent_disagreed');
 
         // --- MODIFICATION START ---
+        prepareIntentionalRedirect();
         recordCompletionCode('C120SCQ9');
         if (isProduction) {
             window.location.href = PROLIFIC_NO_CONSENT_URL;
@@ -2567,9 +2577,7 @@ Thank you again for your participation!
         localStorage.removeItem('participantId');
 
         if (isProduction) {
-            // DEACTIVATE the listeners so this final redirect isn't blocked
-            window.removeEventListener('beforeunload', handleEarlyExit);
-            window.removeEventListener('unload', handleActualExit);
+            prepareIntentionalRedirect();
 
             // Redirect to Prolific after a short delay to ensure download starts
             recordCompletionCode('CR0KFVQO');
@@ -2588,9 +2596,7 @@ Thank you again for your participation!
         localStorage.removeItem('participantId');
 
         if (isProduction) {
-            // DEACTIVATE the listeners before the final redirect
-            window.removeEventListener('beforeunload', handleEarlyExit);
-            window.removeEventListener('unload', handleActualExit);
+            prepareIntentionalRedirect();
             recordCompletionCode('CR0KFVQO');
             window.location.href = PROLIFIC_COMPLETION_URL;
         } else {
@@ -2741,6 +2747,7 @@ Thank you again for your participation!
 
                 recordTimeoutToDatabase('ai_connection_no_messages');
 
+                prepareIntentionalRedirect();
                 recordCompletionCode('C1B54A7Q');
                 if (isProduction) {
                     window.location.href = PROLIFIC_TIMED_OUT_URL;
@@ -3181,6 +3188,7 @@ Thank you again for your participation!
         logUiEvent('leave_waiting_room_clicked');
 
         // Redirect to Prolific with timeout code
+        prepareIntentionalRedirect();
         recordCompletionCode('C1B54A7Q');
         if (isProduction) {
             window.location.href = PROLIFIC_TIMED_OUT_URL;
