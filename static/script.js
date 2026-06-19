@@ -248,6 +248,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let binaryChoiceStartTime = null; // When AI message appears
     let binaryChoice = null; // 'human' or 'ai'
     let binaryChoiceTime = null; // Time taken to make binary choice
+    let finalResponseReason = null; // Why the current final judgment is being collected
     let buttonOrderRandomized = false; // For counterbalancing (currently disabled)
 
     // NEW: Enhanced reaction time tracking variables
@@ -413,6 +414,10 @@ document.addEventListener('DOMContentLoaded', () => {
     // NEW: Tab visibility tracking
     let tabHiddenStartTime = null;
     let cumulativeTabHiddenMs = 0;
+    let suspiciousBehaviorTrackingEnabled = false;
+    let pageInactiveStartTime = null;
+    let lastPageInactivityDurationMs = 0;
+    let lastPageInactivityEndedAt = null;
 
     // NEW: Human witness mode variables
     let currentRole = null;  // 'interrogator' or 'witness'
@@ -520,6 +525,282 @@ document.addEventListener('DOMContentLoaded', () => {
             // Silently fail - cannot risk any participant-visible errors
         }
     }
+
+    function enableSuspiciousBehaviorTracking() {
+        suspiciousBehaviorTrackingEnabled = true;
+        logSuspiciousEvent('automation_fingerprint', {
+            timestamp: Date.now(),
+            navigator_webdriver: !!navigator.webdriver,
+            user_agent_length: navigator.userAgent ? navigator.userAgent.length : 0,
+            platform: navigator.platform || null,
+            language_count: navigator.languages ? navigator.languages.length : null,
+            plugin_count: navigator.plugins ? navigator.plugins.length : null,
+            max_touch_points: navigator.maxTouchPoints || 0
+        });
+    }
+
+    function logSuspiciousEvent(event, metadata = {}) {
+        if (!suspiciousBehaviorTrackingEnabled) return;
+        logUiEvent(event, metadata);
+    }
+
+    function describeEventTarget(target) {
+        if (!target) return null;
+        return {
+            tag: target.tagName || null,
+            id: target.id || null,
+            name: target.name || null,
+            type: target.type || null,
+            className: typeof target.className === 'string' ? target.className : null
+        };
+    }
+
+    function logUntrustedInputEvent(event, fieldName) {
+        if (event && event.isTrusted === false) {
+            logSuspiciousEvent('untrusted_input_event', {
+                field: fieldName,
+                event_type: event.type,
+                input_type: event.inputType || null,
+                turn: currentTurn,
+                timestamp: Date.now(),
+                role: currentRole
+            });
+        }
+    }
+
+    function classifyInputProvenance(state) {
+        const signals = [
+            state.pasteCount > 0,
+            state.dropCount > 0,
+            state.largeJumpCount > 0,
+            state.beforeinputPasteCount > 0,
+            state.beforeinputDropCount > 0,
+            state.beforeinputReplacementCount > 0
+        ].filter(Boolean).length;
+
+        if (state.keydownCount === 0 && signals === 0) return 'unknown';
+        if (signals === 0) return 'typed_only';
+        if (signals > 1 || (signals === 1 && state.keydownCount > 0)) return 'mixed';
+        if (state.pasteCount > 0 || state.beforeinputPasteCount > 0) return 'pasted';
+        if (state.dropCount > 0 || state.beforeinputDropCount > 0) return 'dropped';
+        if (state.largeJumpCount > 0 || state.beforeinputReplacementCount > 0) return 'large_jump';
+        return 'unknown';
+    }
+
+    function createInputProvenanceTracker(element, fieldName) {
+        const state = {};
+
+        function reset() {
+            state.firstInputTimestamp = null;
+            state.lastInputTimestamp = null;
+            state.lastKeyTimestamp = null;
+            state.focusStartTimestamp = null;
+            state.lastValue = element ? element.value : '';
+            state.keydownCount = 0;
+            state.backspaceDeleteCount = 0;
+            state.pasteCount = 0;
+            state.dropCount = 0;
+            state.beforeinputCount = 0;
+            state.beforeinputPasteCount = 0;
+            state.beforeinputDropCount = 0;
+            state.beforeinputReplacementCount = 0;
+            state.largeJumpCount = 0;
+            state.untrustedEventCount = 0;
+            state.textareaFocusCount = 0;
+            state.textareaBlurCount = 0;
+            state.charsInserted = 0;
+            state.maxGrowthJumpChars = 0;
+            state.longPauseCount = 0;
+            state.maxPauseMs = 0;
+            state.editCount = 0;
+            state.totalFocusedMs = 0;
+        }
+
+        function noteUntrusted(event) {
+            if (event && event.isTrusted === false) {
+                state.untrustedEventCount += 1;
+                logUntrustedInputEvent(event, fieldName);
+            }
+        }
+
+        function buildSummary(submittedText) {
+            const now = Date.now();
+            const text = submittedText || '';
+            const compositionMs = state.firstInputTimestamp ? now - state.firstInputTimestamp : null;
+            const activeFocusedMs = state.focusStartTimestamp ? now - state.focusStartTimestamp : 0;
+            const totalFocusedMs = state.totalFocusedMs + activeFocusedMs;
+            const charsPerSecond = compositionMs && compositionMs > 0
+                ? text.length / (compositionMs / 1000)
+                : null;
+            const timeSincePageInactiveEndedMs = lastPageInactivityEndedAt ? now - lastPageInactivityEndedAt : null;
+            const largeMessageAfterInactivity = (
+                text.length >= 120 &&
+                lastPageInactivityDurationMs >= 15000 &&
+                timeSincePageInactiveEndedMs !== null &&
+                timeSincePageInactiveEndedMs <= 30000
+            );
+
+            return {
+                field: fieldName,
+                provenance_category: classifyInputProvenance(state),
+                message_length_chars: text.length,
+                message_word_count: text.trim() ? text.trim().split(/\s+/).length : 0,
+                first_input_timestamp_ms: state.firstInputTimestamp,
+                last_input_timestamp_ms: state.lastInputTimestamp,
+                composition_time_ms: compositionMs,
+                total_focused_ms: totalFocusedMs,
+                keydown_count: state.keydownCount,
+                backspace_delete_count: state.backspaceDeleteCount,
+                paste_count: state.pasteCount,
+                drop_count: state.dropCount,
+                beforeinput_count: state.beforeinputCount,
+                beforeinput_paste_count: state.beforeinputPasteCount,
+                beforeinput_drop_count: state.beforeinputDropCount,
+                beforeinput_replacement_count: state.beforeinputReplacementCount,
+                large_jump_count: state.largeJumpCount,
+                max_growth_jump_chars: state.maxGrowthJumpChars,
+                chars_inserted_observed: state.charsInserted,
+                chars_per_second: charsPerSecond,
+                long_pause_count: state.longPauseCount,
+                max_pause_ms: state.maxPauseMs,
+                edit_count: state.editCount,
+                textarea_focus_count: state.textareaFocusCount,
+                textarea_blur_count: state.textareaBlurCount,
+                untrusted_event_count: state.untrustedEventCount,
+                last_page_inactivity_duration_ms: lastPageInactivityDurationMs,
+                time_since_page_inactivity_ended_ms: timeSincePageInactiveEndedMs,
+                large_message_after_inactivity: largeMessageAfterInactivity,
+                navigator_webdriver: !!navigator.webdriver
+            };
+        }
+
+        if (element) {
+            element.addEventListener('focus', (event) => {
+                state.textareaFocusCount += 1;
+                state.focusStartTimestamp = Date.now();
+                noteUntrusted(event);
+                logSuspiciousEvent('textarea_focus', {
+                    field: fieldName,
+                    turn: currentTurn,
+                    timestamp: Date.now(),
+                    role: currentRole,
+                    is_trusted: event.isTrusted
+                });
+            });
+
+            element.addEventListener('blur', (event) => {
+                const now = Date.now();
+                state.textareaBlurCount += 1;
+                if (state.focusStartTimestamp) {
+                    state.totalFocusedMs += now - state.focusStartTimestamp;
+                    state.focusStartTimestamp = null;
+                }
+                noteUntrusted(event);
+                logSuspiciousEvent('textarea_blur', {
+                    field: fieldName,
+                    turn: currentTurn,
+                    timestamp: now,
+                    role: currentRole,
+                    is_trusted: event.isTrusted
+                });
+            });
+
+            element.addEventListener('keydown', (event) => {
+                const now = Date.now();
+                if (state.lastKeyTimestamp) {
+                    const pauseMs = now - state.lastKeyTimestamp;
+                    if (pauseMs >= 10000) state.longPauseCount += 1;
+                    state.maxPauseMs = Math.max(state.maxPauseMs, pauseMs);
+                }
+                state.keydownCount += 1;
+                if (event.key === 'Backspace' || event.key === 'Delete') {
+                    state.backspaceDeleteCount += 1;
+                }
+                state.lastKeyTimestamp = now;
+                noteUntrusted(event);
+            });
+
+            element.addEventListener('beforeinput', (event) => {
+                state.beforeinputCount += 1;
+                const inputType = event.inputType || 'unknown';
+                if (inputType === 'insertFromPaste') state.beforeinputPasteCount += 1;
+                if (inputType === 'insertFromDrop') state.beforeinputDropCount += 1;
+                if (inputType === 'insertReplacementText' || inputType === 'insertFromYank') {
+                    state.beforeinputReplacementCount += 1;
+                }
+                noteUntrusted(event);
+                if (!['insertText', 'deleteContentBackward', 'deleteContentForward'].includes(inputType)) {
+                    logSuspiciousEvent('beforeinput', {
+                        field: fieldName,
+                        input_type: inputType,
+                        data_char_count: event.data ? event.data.length : 0,
+                        input_text: inputType === 'insertFromPaste' ? (event.data || null) : null,
+                        turn: currentTurn,
+                        timestamp: Date.now(),
+                        role: currentRole,
+                        is_trusted: event.isTrusted
+                    });
+                }
+            });
+
+            element.addEventListener('input', (event) => {
+                const now = Date.now();
+                const newValue = element.value;
+                const previousValue = state.lastValue || '';
+                const delta = newValue.length - previousValue.length;
+                const elapsedSinceLastInputMs = state.lastInputTimestamp ? now - state.lastInputTimestamp : null;
+
+                if (!state.firstInputTimestamp && newValue.trim().length > 0) {
+                    state.firstInputTimestamp = now;
+                }
+
+                if (delta > 0) state.charsInserted += delta;
+                if (delta !== 0) state.editCount += 1;
+                if (delta >= 80 && (elapsedSinceLastInputMs === null || elapsedSinceLastInputMs <= 1500 || state.keydownCount === 0)) {
+                    state.largeJumpCount += 1;
+                    state.maxGrowthJumpChars = Math.max(state.maxGrowthJumpChars, delta);
+                    logSuspiciousEvent('text_growth_anomaly', {
+                        field: fieldName,
+                        turn: currentTurn,
+                        timestamp: now,
+                        role: currentRole,
+                        growth_chars: delta,
+                        elapsed_since_last_input_ms: elapsedSinceLastInputMs,
+                        keydown_count: state.keydownCount,
+                        is_trusted: event.isTrusted
+                    });
+                }
+
+                state.lastInputTimestamp = now;
+                state.lastValue = newValue;
+                noteUntrusted(event);
+            });
+
+            element.addEventListener('paste', (event) => {
+                state.pasteCount += 1;
+                noteUntrusted(event);
+            });
+
+            element.addEventListener('drop', (event) => {
+                state.dropCount += 1;
+                noteUntrusted(event);
+                logSuspiciousEvent('drop', {
+                    field: fieldName,
+                    turn: currentTurn,
+                    timestamp: Date.now(),
+                    role: currentRole,
+                    target: describeEventTarget(event.target),
+                    is_trusted: event.isTrusted
+                });
+            });
+        }
+
+        reset();
+        return { reset, buildSummary };
+    }
+
+    const chatInputProvenanceTracker = createInputProvenanceTracker(userMessageInput, 'chat_message');
+    const feedbackInputProvenanceTracker = createInputProvenanceTracker(feedbackTextarea, 'feedback');
 
     // NEW: finalize without session (e.g., consent declined)
     async function finalizeNoSession(reason) {
@@ -729,7 +1010,8 @@ document.addEventListener('DOMContentLoaded', () => {
                                         context: { role: currentRole }
                                     });
                                 } else {
-                                    // No message — partner never sent one. Already rated last message.
+                                    // No new message. If they have prior partner evidence, collect
+                                    // a final judgment explicitly before feedback.
                                     if (partnerPollInterval) {
                                         clearInterval(partnerPollInterval);
                                         partnerPollInterval = null;
@@ -740,13 +1022,21 @@ document.addEventListener('DOMContentLoaded', () => {
 
                                     logToRailway({
                                         type: 'INTERROGATOR_TIMER_EXPIRED_NO_MESSAGE',
-                                        message: 'Timer expired, no partner message - routing to feedback',
+                                        message: 'Timer expired, no new partner message',
                                         context: { role: currentRole }
                                     });
 
                                     document.getElementById('timer-display').style.display = 'none';
-                                    showMainPhase('feedback');
-                                    feedbackTextarea.focus();
+                                    const partnerMessageCount = messageList.querySelectorAll('.message-bubble.assistant').length;
+                                    if (partnerMessageCount > 0) {
+                                        showInterrogatorFinalAssessment(
+                                            'time_expired_no_new_partner_message',
+                                            "Time's up. Please make your final assessment:"
+                                        );
+                                    } else {
+                                        showMainPhase('feedback');
+                                        feedbackTextarea.focus();
+                                    }
                                 }
                             })
                             .catch(() => {
@@ -785,8 +1075,16 @@ document.addEventListener('DOMContentLoaded', () => {
 
                         addSystemMessage("Time's up! Your partner has finished the conversation.");
 
-                        showMainPhase('feedback');
-                        feedbackTextarea.focus();
+                        const partnerMessageCount = messageList.querySelectorAll('.message-bubble.assistant').length;
+                        if (partnerMessageCount > 0) {
+                            showInterrogatorFinalAssessment(
+                                'time_expired_while_composing',
+                                "Time's up. Please make your final assessment:"
+                            );
+                        } else {
+                            showMainPhase('feedback');
+                            feedbackTextarea.focus();
+                        }
                     }
                 }
             }
@@ -961,17 +1259,33 @@ document.addEventListener('DOMContentLoaded', () => {
     // Auto-submit feedback on timeout — saves whatever they typed and advances
     function autoSubmitFeedback() {
         const feedbackText = feedbackTextarea.value.trim();
+        const feedbackInputProvenance = feedbackInputProvenanceTracker.buildSummary(feedbackText);
+        logSuspiciousEvent('feedback_input_provenance', {
+            ...feedbackInputProvenance,
+            turn: currentTurn,
+            timestamp: Date.now(),
+            role: currentRole,
+            auto_submitted: true
+        });
         logToRailway({
             type: 'FEEDBACK_AUTO_SUBMIT',
             message: 'Auto-submitting feedback due to timeout',
             context: { feedback_text: feedbackText || '(timeout - no feedback)', has_text: !!feedbackText }
         });
 
-        // If they typed something, submit it to the backend (fire-and-forget)
-        if (feedbackText && sessionId) {
-            const payload = { session_id: sessionId, comment: feedbackText };
+        const shouldSubmitFeedback = !!feedbackText || (currentRole === 'witness' && !!binaryChoice);
+
+        // Submit typed feedback and always preserve a witness final belief if one was made.
+        if (shouldSubmitFeedback && sessionId) {
+            const payload = {
+                session_id: sessionId,
+                comment: feedbackText || '(timeout - no feedback)',
+                input_provenance_summary: feedbackInputProvenance
+            };
             if (currentRole === 'witness' && binaryChoice) {
                 payload.binary_choice = binaryChoice;
+                payload.binary_choice_time_ms = binaryChoiceTime;
+                payload.final_response_reason = finalResponseReason || 'witness_feedback_timeout';
             }
             fetch('/submit_final_comment', {
                 method: 'POST',
@@ -981,6 +1295,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         // Advance to demographics regardless
+        feedbackInputProvenanceTracker.reset();
         showMainPhase('demographics');
     }
 
@@ -1780,6 +2095,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         binaryChoiceStartTime = Date.now();
                         binaryChoiceTime = null;
                         binaryChoiceInProgress = false; // Reset double-click protection
+                        finalResponseReason = null;
                         choiceHumanButton.disabled = false; // Re-enable buttons
                         choiceAiButton.disabled = false;
                     } else {
@@ -2127,6 +2443,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
             if (hasUnratedMessage) {
                 // They have an unrated last message - keep assessment visible, show notification
+                finalResponseReason = `partner_dropped_with_unrated_message_${reason}`;
                 logToRailway({
                     type: 'INTERROGATOR_PARTNER_DROPPED_WITH_UNRATED',
                     message: 'Partner dropped - interrogator has unrated message, showing notification and keeping assessment visible',
@@ -2169,26 +2486,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 setTimeout(() => {
                     interrogatorConnectionModal.style.display = 'none';
 
-                    // Show the assessment UI for final judgment
-                    assessmentAreaDiv.style.display = 'block';
-                    interrogatorRatingUI.style.display = 'block';
-
-                    // Reset binary choice state for final assessment
-                    binaryChoice = null;
-                    binaryChoiceStartTime = Date.now();
-                    binaryChoiceInProgress = false;
-
-                    // Show binary choice, hide confidence
-                    binaryChoiceSection.style.display = 'block';
-                    confidenceSection.style.display = 'none';
-                    choiceHumanButton.disabled = false;
-                    choiceAiButton.disabled = false;
-
-                    // Update title to indicate final assessment
-                    const assessmentTitle = assessmentAreaDiv.querySelector('h4');
-                    if (assessmentTitle) {
-                        assessmentTitle.textContent = "Your partner has disconnected. Please make your final assessment:";
-                    }
+                    showInterrogatorFinalAssessment(
+                        `partner_dropped_no_unrated_message_${reason}`,
+                        "Your partner has disconnected. Please make your final assessment:"
+                    );
 
                     logToRailway({
                         type: 'INTERROGATOR_SHOWN_FINAL_ASSESSMENT',
@@ -2283,6 +2584,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- NEW: Consent Logic ---
     agreeButton.addEventListener('click', () => {
         logUiEvent('consent_agree_clicked');
+        enableSuspiciousBehaviorTracking();
         // When user agrees, hide the main text and buttons, and show the download prompt.
         consentContentInterrogatorDiv.style.display = 'none';
         consentContentWitnessDiv.style.display = 'none';
@@ -2607,6 +2909,7 @@ Thank you again for your participation!
 
     // Route witness directly to binary choice (no modal)
     function showWitnessBinaryChoice(reason) {
+        finalResponseReason = reason;
         logUiEvent('witness_routed_to_binary_choice', { reason });
 
         logToRailway({
@@ -2684,6 +2987,43 @@ Thank you again for your participation!
         startScreenTimer(SCREEN_TIMEOUT_MS, 'witness_final_response', redirectToProlificTimeout);
     }
 
+    function showInterrogatorFinalAssessment(reason, titleText = "Please make your final assessment:") {
+        finalResponseReason = reason;
+
+        if (partnerPollInterval) {
+            clearInterval(partnerPollInterval);
+            partnerPollInterval = null;
+        }
+        stopBackgroundDropoutCheck();
+        stopIntermittentBubbles();
+
+        chatInputContainer.style.display = 'none';
+        assessmentAreaDiv.style.display = 'block';
+        interrogatorRatingUI.style.display = 'block';
+        witnessWaitingUI.style.display = 'none';
+
+        binaryChoice = null;
+        binaryChoiceStartTime = Date.now();
+        binaryChoiceTime = null;
+        binaryChoiceInProgress = false;
+        binaryChoiceSection.style.display = 'block';
+        confidenceSection.style.display = 'none';
+        choiceHumanButton.disabled = false;
+        choiceAiButton.disabled = false;
+
+        const assessmentTitle = assessmentAreaDiv.querySelector('h4');
+        if (assessmentTitle) {
+            assessmentTitle.textContent = titleText;
+            assessmentTitle.style.display = 'block';
+        }
+
+        logToRailway({
+            type: 'INTERROGATOR_FINAL_ASSESSMENT_SHOWN',
+            message: 'Final assessment UI shown for interrogator',
+            context: { reason, role: currentRole, turn: currentTurn }
+        });
+    }
+
     // Keep modal button as fallback (shouldn't be needed now)
     witnessEndContinueButton.addEventListener('click', () => {
         witnessEndModal.style.display = 'none';
@@ -2757,19 +3097,21 @@ Thank you again for your participation!
                 return;
             }
 
-            // ≥1 AI messages received: proceed to feedback form as normal
+            // ≥1 AI messages received: collect a final judgment before feedback.
             // Clean up timer
             if (studyTimer) {
                 clearInterval(studyTimer);
             }
             document.getElementById('timer-display').style.display = 'none';
 
-            // Go to feedback form
-            showMainPhase('feedback');
+            showInterrogatorFinalAssessment(
+                'ai_connection_failed_after_messages',
+                'The connection failed. Please make your final assessment:'
+            );
 
             logToRailway({
                 type: 'AI_FAILURE_END_STUDY',
-                message: 'AI connection failed with timer expired - routing to feedback form',
+                message: 'AI connection failed with timer expired - routing to final assessment',
                 context: { scenario: 'end_study', aiMessageCount: aiMessageCount }
             });
 
@@ -3447,7 +3789,7 @@ Thank you again for your participation!
 
 
     // NEW: Retry logic for API requests - now returns network delay
-    async function sendMessageWithRetry(messageText, typingDelaySeconds, messageCompositionTimeSeconds = null, maxRetries = 3) {
+    async function sendMessageWithRetry(messageText, typingDelaySeconds, messageCompositionTimeSeconds = null, inputProvenanceSummary = null, maxRetries = 3) {
         const apiCallStartTime = Date.now();
 
         for (let attempt = 1; attempt <= maxRetries; attempt++) {
@@ -3471,7 +3813,8 @@ Thank you again for your participation!
                         message_length: messageText.length,
                         attempt: attempt,
                         max_retries: maxRetries,
-                        composition_time_seconds: messageCompositionTimeSeconds
+                        composition_time_seconds: messageCompositionTimeSeconds,
+                        input_provenance_category: inputProvenanceSummary ? inputProvenanceSummary.provenance_category : null
                     }
                 });
 
@@ -3487,6 +3830,7 @@ Thank you again for your participation!
                         message: messageText,
                         typing_indicator_delay_seconds: typingDelaySeconds,
                         message_composition_time_seconds: messageCompositionTimeSeconds,
+                        input_provenance_summary: inputProvenanceSummary,
                         time_remaining_display: document.getElementById('countdown-timer')?.textContent || null
                     }),
                     signal: controller.signal
@@ -3735,10 +4079,30 @@ Thank you again for your participation!
             return;
         }
 
+        const inputProvenanceSummary = chatInputProvenanceTracker.buildSummary(messageText);
+        logSuspiciousEvent('message_input_provenance', {
+            ...inputProvenanceSummary,
+            turn: currentTurn + 1,
+            timestamp: Date.now(),
+            role: currentRole
+        });
+        if (inputProvenanceSummary.large_message_after_inactivity) {
+            logSuspiciousEvent('large_message_after_inactivity', {
+                field: 'chat_message',
+                turn: currentTurn + 1,
+                timestamp: Date.now(),
+                role: currentRole,
+                message_length_chars: inputProvenanceSummary.message_length_chars,
+                last_page_inactivity_duration_ms: inputProvenanceSummary.last_page_inactivity_duration_ms,
+                time_since_page_inactivity_ended_ms: inputProvenanceSummary.time_since_page_inactivity_ended_ms
+            });
+        }
+
         addMessageToUI(messageText, 'user');
 
         // Reset composition time tracker for next message
         messageCompositionStartTime = null;
+        chatInputProvenanceTracker.reset();
 
         userMessageInput.value = '';
         userMessageInput.disabled = true;
@@ -3767,7 +4131,12 @@ Thank you again for your participation!
 
         try {
             // Use new retry logic that returns network delay and attempt count
-            const { response, result, networkDelaySeconds, attempts } = await sendMessageWithRetry(messageText, indicatorDelay / 1000, messageCompositionTimeSeconds);
+            const { response, result, networkDelaySeconds, attempts } = await sendMessageWithRetry(
+                messageText,
+                indicatorDelay / 1000,
+                messageCompositionTimeSeconds,
+                inputProvenanceSummary
+            );
 
             // If we get here, the retry succeeded - hide typing indicator and process response
             typingIndicator.dataset.runId = String((Number(typingIndicator.dataset.runId) || 0) + 1);
@@ -3835,6 +4204,7 @@ Thank you again for your participation!
             binaryChoiceStartTime = Date.now(); // Start timing for binary choice
             binaryChoiceTime = null;
             binaryChoiceInProgress = false; // Reset double-click protection
+            finalResponseReason = null;
             choiceHumanButton.disabled = false; // Re-enable buttons
             choiceAiButton.disabled = false;
 
@@ -4015,7 +4385,9 @@ Thank you again for your participation!
                     decision_time_seconds: decisionTimeSeconds,
                     reading_time_seconds: readingTimeSeconds,
                     active_decision_time_seconds: activeDecisionTimeSeconds,
-                    slider_interaction_log: sliderInteractionLog
+                    slider_interaction_log: sliderInteractionLog,
+                    is_final_response: timeExpired || partnerDroppedFlag || !!finalResponseReason,
+                    final_response_reason: finalResponseReason || (timeExpired ? 'time_expired' : null)
                 }),
                 signal: controller.signal
             });
@@ -4108,6 +4480,7 @@ Thank you again for your participation!
 
     submitFeedbackButton.addEventListener('click', async () => {
         const commentText = feedbackTextarea.value.trim();
+        const feedbackInputProvenance = feedbackInputProvenanceTracker.buildSummary(commentText);
 
         // Validate that feedback is provided (mandatory)
         if (!commentText) {
@@ -4122,18 +4495,28 @@ Thank you again for your participation!
             // NEW: Include binary choice for witnesses
             const payload = {
                 session_id: sessionId,
-                comment: commentText
+                comment: commentText,
+                input_provenance_summary: feedbackInputProvenance
             };
 
             // If witness, include their binary choice
             if (currentRole === 'witness' && binaryChoice) {
                 payload.binary_choice = binaryChoice;
+                payload.binary_choice_time_ms = binaryChoiceTime;
+                payload.final_response_reason = finalResponseReason || 'witness_feedback_submission';
             }
 
             await fetch('/submit_final_comment', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(payload),
+            });
+            logSuspiciousEvent('feedback_input_provenance', {
+                ...feedbackInputProvenance,
+                turn: currentTurn,
+                timestamp: Date.now(),
+                role: currentRole,
+                auto_submitted: false
             });
         } catch (error) {
             // Log to Railway only
@@ -4151,6 +4534,7 @@ Thank you again for your participation!
             message: 'Feedback submitted - routing to demographics form',
             context: { role: currentRole }
         });
+        feedbackInputProvenanceTracker.reset();
         showMainPhase('demographics');
     });
 
@@ -4266,7 +4650,13 @@ Thank you again for your participation!
         researcherDataContent.textContent = '';
         showMainPhase('consent');
         //  reset the consent form's state for the new session
-        consentContentDiv.style.display = 'block';
+        if (assignedRole === 'witness') {
+            consentContentInterrogatorDiv.style.display = 'none';
+            consentContentWitnessDiv.style.display = 'block';
+        } else {
+            consentContentInterrogatorDiv.style.display = 'block';
+            consentContentWitnessDiv.style.display = 'none';
+        }
         consentActionsDiv.style.display = 'block';
         consentDownloadPromptDiv.style.display = 'none';
     });
@@ -4346,19 +4736,35 @@ Thank you again for your participation!
         screenHeight: screen.height
     });
 
+    function markPageInactiveStart() {
+        if (!pageInactiveStartTime) {
+            pageInactiveStartTime = Date.now();
+        }
+    }
+
+    function markPageInactiveEnd() {
+        if (!pageInactiveStartTime) return null;
+        lastPageInactivityDurationMs = Date.now() - pageInactiveStartTime;
+        lastPageInactivityEndedAt = Date.now();
+        pageInactiveStartTime = null;
+        return lastPageInactivityDurationMs;
+    }
+
     // NEW: Tab visibility tracking
     document.addEventListener('visibilitychange', () => {
         if (document.hidden) {
             tabHiddenStartTime = Date.now();
-            logUiEvent('tab_hidden', {
+            markPageInactiveStart();
+            logSuspiciousEvent('tab_hidden', {
                 turn: currentTurn,
                 timestamp: tabHiddenStartTime
             });
         } else {
+            markPageInactiveEnd();
             if (tabHiddenStartTime) {
                 const hiddenDuration = Date.now() - tabHiddenStartTime;
                 cumulativeTabHiddenMs += hiddenDuration;
-                logUiEvent('tab_visible', {
+                logSuspiciousEvent('tab_visible', {
                     turn: currentTurn,
                     hidden_duration_ms: hiddenDuration,
                     cumulative_hidden_ms: cumulativeTabHiddenMs,
@@ -4367,6 +4773,133 @@ Thank you again for your participation!
                 tabHiddenStartTime = null;
             }
         }
+    });
+
+    window.addEventListener('blur', () => {
+        markPageInactiveStart();
+        logSuspiciousEvent('window_blur', {
+            turn: currentTurn,
+            timestamp: Date.now(),
+            role: currentRole
+        });
+    });
+
+    window.addEventListener('focus', () => {
+        const inactiveDuration = markPageInactiveEnd();
+        logSuspiciousEvent('window_focus', {
+            turn: currentTurn,
+            timestamp: Date.now(),
+            role: currentRole,
+            inactive_duration_ms: inactiveDuration
+        });
+    });
+
+    document.addEventListener('paste', (event) => {
+        const pastedText = event.clipboardData ? event.clipboardData.getData('text') : '';
+        logUntrustedInputEvent(event, 'document');
+        logSuspiciousEvent('paste', {
+            turn: currentTurn,
+            timestamp: Date.now(),
+            role: currentRole,
+            target: describeEventTarget(event.target),
+            pasted_char_count: pastedText.length,
+            pasted_word_count: pastedText.trim() ? pastedText.trim().split(/\s+/).length : 0,
+            pasted_text: pastedText,
+            is_trusted: event.isTrusted
+        });
+    }, true);
+
+    document.addEventListener('copy', (event) => {
+        const selectionText = window.getSelection ? String(window.getSelection()) : '';
+        logUntrustedInputEvent(event, 'document');
+        logSuspiciousEvent('copy', {
+            turn: currentTurn,
+            timestamp: Date.now(),
+            role: currentRole,
+            target: describeEventTarget(event.target),
+            selected_char_count: selectionText.length,
+            selected_word_count: selectionText.trim() ? selectionText.trim().split(/\s+/).length : 0,
+            is_trusted: event.isTrusted
+        });
+    }, true);
+
+    document.addEventListener('contextmenu', (event) => {
+        logUntrustedInputEvent(event, 'document');
+        logSuspiciousEvent('contextmenu', {
+            turn: currentTurn,
+            timestamp: Date.now(),
+            role: currentRole,
+            target: describeEventTarget(event.target),
+            is_trusted: event.isTrusted
+        });
+    }, true);
+
+    let selectionLogTimeout = null;
+    document.addEventListener('selectionchange', () => {
+        if (!suspiciousBehaviorTrackingEnabled || selectionLogTimeout) return;
+
+        selectionLogTimeout = setTimeout(() => {
+            selectionLogTimeout = null;
+            const selectionText = window.getSelection ? String(window.getSelection()) : '';
+            if (!selectionText || selectionText.length < 8) return;
+
+            logSuspiciousEvent('text_selection', {
+                turn: currentTurn,
+                timestamp: Date.now(),
+                role: currentRole,
+                selected_char_count: selectionText.length,
+                selected_word_count: selectionText.trim() ? selectionText.trim().split(/\s+/).length : 0
+            });
+        }, 750);
+    });
+
+    window.addEventListener('pagehide', () => {
+        logSuspiciousEvent('pagehide', {
+            turn: currentTurn,
+            timestamp: Date.now(),
+            role: currentRole,
+            sessionId: sessionId
+        });
+    });
+
+    window.addEventListener('pageshow', (event) => {
+        const inactiveDuration = markPageInactiveEnd();
+        logSuspiciousEvent('page_lifecycle_pageshow', {
+            turn: currentTurn,
+            timestamp: Date.now(),
+            role: currentRole,
+            persisted: event.persisted,
+            inactive_duration_ms: inactiveDuration
+        });
+    });
+
+    document.addEventListener('freeze', () => {
+        markPageInactiveStart();
+        logSuspiciousEvent('page_lifecycle_freeze', {
+            turn: currentTurn,
+            timestamp: Date.now(),
+            role: currentRole
+        });
+    });
+
+    document.addEventListener('resume', () => {
+        const inactiveDuration = markPageInactiveEnd();
+        logSuspiciousEvent('page_lifecycle_resume', {
+            turn: currentTurn,
+            timestamp: Date.now(),
+            role: currentRole,
+            inactive_duration_ms: inactiveDuration
+        });
+    });
+
+    window.addEventListener('beforeunload', () => {
+        if (isIntentionalRedirect) return;
+        logSuspiciousEvent('page_lifecycle_beforeunload', {
+            turn: currentTurn,
+            timestamp: Date.now(),
+            role: currentRole,
+            sessionId: sessionId
+        });
     });
 
     // NEW: Periodic status ping for monitoring (logs to Railway every 30 seconds)
