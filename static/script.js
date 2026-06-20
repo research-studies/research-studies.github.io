@@ -3572,7 +3572,50 @@ Thank you again for your participation!
         handleBinaryChoice('ai');
     });
 
-    function handleBinaryChoice(choice) {
+    async function submitWitnessFinalChoiceWithRetry(choice, reason) {
+        if (!sessionId) return false;
+        const payload = {
+            session_id: sessionId,
+            binary_choice: choice,
+            binary_choice_time_ms: binaryChoiceTime,
+            final_response_reason: reason || finalResponseReason || 'witness_final_choice_click'
+        };
+
+        for (let attempt = 1; attempt <= 2; attempt++) {
+            try {
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 10000);
+                const response = await fetch('/submit_witness_final_choice', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload),
+                    signal: controller.signal
+                });
+                clearTimeout(timeoutId);
+                if (response.ok) return true;
+            } catch (error) {
+                logToRailway({
+                    type: 'WITNESS_FINAL_CHOICE_SAVE_ERROR',
+                    message: error.message,
+                    context: { attempt, choice, reason: payload.final_response_reason }
+                });
+            }
+        }
+
+        try {
+            const blob = new Blob([JSON.stringify(payload)], { type: 'application/json' });
+            navigator.sendBeacon(`${API_BASE_URL}/submit_witness_final_choice`, blob);
+        } catch (error) {
+            logToRailway({
+                type: 'WITNESS_FINAL_CHOICE_BEACON_ERROR',
+                message: error.message,
+                context: { choice, reason: payload.final_response_reason }
+            });
+        }
+        return false;
+    }
+
+    async function handleBinaryChoice(choice) {
         // PROTECTION: Prevent double-clicking - only process first click
         if (binaryChoiceInProgress) {
             logToRailway({
@@ -3618,6 +3661,8 @@ Thank you again for your participation!
                 message: 'Witness selected binary choice, routing to comment box',
                 context: { choice: choice }
             });
+
+            await submitWitnessFinalChoiceWithRetry(choice, finalResponseReason || 'witness_final_choice_click');
 
             // Hide assessment area
             assessmentAreaDiv.style.display = 'none';
