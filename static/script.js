@@ -287,8 +287,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 context: { role: currentRole, isHumanPartner }
             });
             logUiEvent('conversation_inactivity_timeout');
-            recordTimeoutToDatabase('conversation_inactivity');
-            redirectToProlificTimeout();
+            endStudyWithScenario('conversation_inactivity', 'conversation_inactivity');
         }, CONVERSATION_INACTIVITY_MS);
     }
 
@@ -411,6 +410,59 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
+    // === Exit-scenario taxonomy (decisions #3/#4): one clear message per situation ===
+    // Each non-normal exit has its own title/body (participant-fault vs system-fault wording)
+    // and a Prolific completion code. To distinguish scenarios in Prolific, create dedicated
+    // completion codes and swap the `code` values below; several currently reuse the configured
+    // "timed out" code (C1B54A7Q) so payments keep working until new codes are created.
+    const PROLIFIC_COMPLETE_BASE = "https://app.prolific.com/submissions/complete?cc=";
+    const postStudyCode = () => (urlVersion === '2' ? 'CNEGS1RX' : 'C12UYMCR'); // condition-specific
+    const EXIT_SCENARIOS = {
+        // --- Pre-conversation, participant inactive (their action needed) ---
+        consent_timeout:         { title: "Session timed out",  fault: "participant", code: 'C1B54A7Q', body: "You didn't continue past the consent screen in time, so the session has ended." },
+        instructions_timeout:    { title: "Session timed out",  fault: "participant", code: 'C1B54A7Q', body: "You were inactive on the instructions for too long, so the session has ended." },
+        pre_chat_timeout:        { title: "Session timed out",  fault: "participant", code: 'C1B54A7Q', body: "You were inactive before the conversation began, so the session has ended." },
+        conversation_inactivity: { title: "Conversation ended", fault: "participant", code: 'C1B54A7Q', body: "You were inactive during the conversation for too long, so it ended early." },
+        // --- System / bad luck (explicitly reassure: not their fault, still paid) ---
+        no_match:                { title: "No partner available",          fault: "system", code: 'C1B54A7Q', body: "We couldn't match you with a partner in time. This is not your fault — you will still be paid for your time." },
+        backend_cleanup:         { title: "Connection lost while waiting", fault: "system", code: 'C1B54A7Q', body: "We lost your connection while you were waiting to be matched. This is not your fault — you will still be paid for your time." },
+        technical_issue:         { title: "Technical issue",               fault: "system", code: 'C1B54A7Q', body: "A technical problem interrupted the study before it could finish. This is not your fault — you will still be paid for your time." },
+        // --- Post-conversation (finished the task; reassure they're paid) ---
+        demographics_timeout:    { title: "Survey timed out", fault: "post", codeFn: postStudyCode, body: "You completed the conversation, but the final survey timed out. You have completed the task and will be paid." },
+        post_study_issue:        { title: "Thanks for completing the conversation", fault: "post", codeFn: postStudyCode, body: "There was an issue capturing your final response, but you have completed the task and will be paid. You'll be redirected shortly." },
+    };
+
+    // Show the scenario's message, record it, then redirect (with a safety auto-continue).
+    // Pass screenNameForDb only when the caller hasn't already recorded the timeout_screen.
+    function endStudyWithScenario(scenarioId, screenNameForDb) {
+        const sc = EXIT_SCENARIOS[scenarioId] || EXIT_SCENARIOS.technical_issue;
+        const code = sc.codeFn ? sc.codeFn() : sc.code;
+        clearScreenTimer();
+        if (screenNameForDb) recordTimeoutToDatabase(screenNameForDb);
+        prepareIntentionalRedirect();
+        recordCompletionCode(code);
+        logUiEvent('exit_scenario', { scenario: scenarioId, fault: sc.fault, code });
+        logToRailway({ type: 'EXIT_SCENARIO', message: `Exit: ${scenarioId} (${sc.fault})`, context: { scenarioId, code } });
+
+        const go = () => {
+            if (isProduction) window.location.href = PROLIFIC_COMPLETE_BASE + code;
+            else alert(`DEV MODE: exit '${scenarioId}' (${sc.fault}) -> code ${code}`);
+        };
+        const overlay = document.createElement('div');
+        overlay.className = 'modal-overlay';
+        overlay.style.display = 'flex';
+        overlay.innerHTML = `
+            <div class="modal-content">
+                <h3 style="text-align: center; margin-top: 0;">${sc.title}</h3>
+                <p style="text-align: center;">${sc.body}</p>
+                <button id="exit-scenario-btn" style="margin: 20px auto; display: block;">Continue</button>
+            </div>`;
+        document.body.appendChild(overlay);
+        document.getElementById('exit-scenario-btn').addEventListener('click', go);
+        // Safety net: never strand them on the modal — auto-continue after 10s.
+        setTimeout(go, 10000);
+    }
+
     // NEW: Tab visibility tracking
     let tabHiddenStartTime = null;
     let cumulativeTabHiddenMs = 0;
@@ -432,6 +484,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let backgroundDropoutCheckInterval = null; // Lightweight check for partner_dropped while composing
     let intermittentBubbleTimeout = null; // NEW: Track intermittent bubble animation timeout
     let isShowingIntermittentBubbles = false; // NEW: Flag to track if intermittent bubbles are active
+    let interrogatorConnectionModalTimeout = null; // C1: cancel modal auto-close if user clicks through
 
     // --- NEW: SLIDER VALUE DISPLAY LOGIC ---
     const allSliders = document.querySelectorAll('#initial-form input[type="range"]');
@@ -999,6 +1052,10 @@ document.addEventListener('DOMContentLoaded', () => {
                                         assessmentTitle.style.display = 'none';
                                     }
                                     updateTimerMessage();
+                                    // C5: this branch builds the final assessment manually (not via
+                                    // showInterrogatorFinalAssessment), so arm the same backstop here.
+                                    finalResponseReason = finalResponseReason || 'time_expired_message_at_zero';
+                                    armInterrogatorFinalAssessmentBackstop();
                                 } else if (result.partner_typing) {
                                     // Message exists but in artificial delay — let existing poll
                                     // keep running. It will show typing bubbles, deliver the message
@@ -1085,6 +1142,13 @@ document.addEventListener('DOMContentLoaded', () => {
                             showMainPhase('feedback');
                             feedbackTextarea.focus();
                         }
+                    } else if (!isHumanPartner) {
+                        // A1: AI mode, timer expired while composing. Per design (decision #5) the
+                        // interrogator should send one last message to get a final AI response to
+                        // judge, so we do NOT force-end here. Arm a backstop so a non-responder who
+                        // walks away is redirected with a labeled reason instead of stuck with no timer.
+                        // Sending a message clears this via clearScreenTimer() in handleSendMessage.
+                        startScreenTimer(POST_STUDY_TIMEOUT_MS, 'ai_compose_after_expiry', showPostStudyIssueRedirect);
                     }
                 }
             }
@@ -1217,22 +1281,22 @@ document.addEventListener('DOMContentLoaded', () => {
         if (phase === 'consent') {
             consentPhaseDiv.style.display = 'block';
             // 3 minute timeout for consent
-            startScreenTimer(CONSENT_TIMEOUT_MS, 'consent', redirectToProlificTimeout);
+            startScreenTimer(CONSENT_TIMEOUT_MS, 'consent', () => endStudyWithScenario('consent_timeout'));
         }
         else if (phase === 'instructions') {
             instructionsPhaseDiv.style.display = 'block';
             // 2 minute timeout for pre-demo instructions
-            startScreenTimer(SCREEN_TIMEOUT_MS, 'instructions', redirectToProlificTimeout);
+            startScreenTimer(SCREEN_TIMEOUT_MS, 'instructions', () => endStudyWithScenario('instructions_timeout'));
         }
         else if (phase === 'demographics') {
             initialSetupDiv.style.display = 'block';
             // 3 minute timeout for demographics — post-study timeout code (they completed the conversation)
-            startScreenTimer(POST_STUDY_TIMEOUT_MS, 'demographics', redirectToProlificPostStudyTimeout);
+            startScreenTimer(POST_STUDY_TIMEOUT_MS, 'demographics', () => endStudyWithScenario('demographics_timeout'));
         }
         else if (phase === 'role-assignment') {
             roleAssignmentPhaseDiv.style.display = 'block';
             // 2 minute timeout for post-demo instructions
-            startScreenTimer(SCREEN_TIMEOUT_MS, 'role-assignment', redirectToProlificTimeout);
+            startScreenTimer(SCREEN_TIMEOUT_MS, 'role-assignment', () => endStudyWithScenario('pre_chat_timeout'));
         }
         else if (phase === 'waiting-room') {
             waitingRoomPhaseDiv.style.display = 'block';
@@ -1824,17 +1888,8 @@ document.addEventListener('DOMContentLoaded', () => {
                         cleanup_reason: result.cleanup_reason
                     });
 
-                    // Record timeout (backend already updated session, but record screen for analytics)
-                    recordTimeoutToDatabase(`backend_cleanup_${result.cleanup_reason}`);
-
-                    // Redirect to Prolific timeout URL
-                    prepareIntentionalRedirect();
-                    recordCompletionCode('C1B54A7Q');
-                    if (isProduction) {
-                        window.location.href = PROLIFIC_TIMED_OUT_URL;
-                    } else {
-                        alert(`DEV MODE: Backend cleanup marked session as ${result.cleanup_reason}. Would redirect to Prolific timeout URL.`);
-                    }
+                    // System-fault: lost their connection while waiting — explain + reassure.
+                    endStudyWithScenario('backend_cleanup', `backend_cleanup_${result.cleanup_reason}`);
                     return;
                 }
 
@@ -1906,25 +1961,14 @@ document.addEventListener('DOMContentLoaded', () => {
     async function handleMatchTimeout() {
         logUiEvent('match_timeout');
 
-        waitingStatusP.innerHTML = '<span style="color: #d9534f;">Unable to find a match. Redirecting...</span>';
-
         logToRailway({
             type: 'MATCH_TIMEOUT_REDIRECT',
             message: 'No match found after 2 minutes - auto-redirecting to Prolific',
             context: { role: currentRole }
         });
 
-        // Fire-and-forget DB record — do NOT await, it can hang and block the redirect
-        recordTimeoutToDatabase('waiting_room');
-
-        // Auto-redirect to Prolific timeout URL (no need to wait for button click)
-        prepareIntentionalRedirect();
-        recordCompletionCode('C1B54A7Q');
-        if (isProduction) {
-            window.location.href = PROLIFIC_TIMED_OUT_URL;
-        } else {
-            alert('DEV MODE: No match found after 2 minutes. Would redirect to Prolific timeout URL.');
-        }
+        // System/bad-luck: no partner found — explain it's not their fault, still paid.
+        endStudyWithScenario('no_match', 'waiting_room');
     }
 
     function simulateAIMatch() {
@@ -2453,8 +2497,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 // Show brief notification modal
                 interrogatorConnectionModal.style.display = 'flex';
 
-                // Auto-close after 4 seconds
-                setTimeout(() => {
+                // Auto-close after 4 seconds (cancellable if user clicks Continue first — C1)
+                interrogatorConnectionModalTimeout = setTimeout(() => {
+                    interrogatorConnectionModalTimeout = null;
                     interrogatorConnectionModal.style.display = 'none';
 
                     // Update assessment UI to indicate this is final rating
@@ -2482,8 +2527,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 // Show brief notification modal
                 interrogatorConnectionModal.style.display = 'flex';
 
-                // Auto-close after 3 seconds and show final assessment
-                setTimeout(() => {
+                // Auto-close after 3 seconds and show final assessment (cancellable — C1)
+                interrogatorConnectionModalTimeout = setTimeout(() => {
+                    interrogatorConnectionModalTimeout = null;
                     interrogatorConnectionModal.style.display = 'none';
 
                     showInterrogatorFinalAssessment(
@@ -2983,8 +3029,10 @@ Thank you again for your participation!
             assessmentTitle.textContent = "Your Final Assessment";
         }
 
-        // Start 2-minute timer for witness final response — redirect to Prolific on timeout
-        startScreenTimer(SCREEN_TIMEOUT_MS, 'witness_final_response', redirectToProlificTimeout);
+        // Start 2-minute timer for witness final response. T2: they already finished the
+        // conversation, so use the post-study issue redirect (correct code + "you'll be paid"
+        // message), not the waiting-room timeout code.
+        startScreenTimer(SCREEN_TIMEOUT_MS, 'witness_final_response', showPostStudyIssueRedirect);
     }
 
     function showInterrogatorFinalAssessment(reason, titleText = "Please make your final assessment:") {
@@ -3022,6 +3070,27 @@ Thank you again for your participation!
             message: 'Final assessment UI shown for interrogator',
             context: { reason, role: currentRole, turn: currentTurn }
         });
+
+        // C5: backstop — never leave the interrogator stuck on the final assessment with no exit.
+        armInterrogatorFinalAssessmentBackstop();
+    }
+
+    // Shared "you finished — issue capturing your answer, you'll still be paid" exit, used for
+    // post-conversation capture failures (interrogator + witness final-assessment timeouts).
+    // Delegates to the exit-scenario taxonomy so all exits share one message/code source of truth.
+    function showPostStudyIssueRedirect() {
+        endStudyWithScenario('post_study_issue');
+    }
+
+    // C5: arm the 2-min backstop on the interrogator final assessment. Saves any choice already
+    // made, then routes to the post-study issue redirect. A successful submit (showMainPhase) clears it.
+    function armInterrogatorFinalAssessmentBackstop() {
+        startScreenTimer(SCREEN_TIMEOUT_MS, 'interrogator_final_assessment', () => {
+            if (binaryChoice) {
+                submitInterrogatorFinalChoiceWithRetry(binaryChoice, 'final_assessment_timeout');
+            }
+            showPostStudyIssueRedirect();
+        });
     }
 
     // Keep modal button as fallback (shouldn't be needed now)
@@ -3041,9 +3110,15 @@ Thank you again for your participation!
         });
     });
 
-    // NEW: Interrogator connection issue modal continue button - proceed to feedback form
+    // C1: "Continue to Final Assessment" must COLLECT the final rating, not skip to feedback.
     interrogatorConnectionContinueButton.addEventListener('click', () => {
         logUiEvent('interrogator_connection_modal_continue_clicked');
+
+        // Cancel any pending auto-close so it can't re-fire and reset the assessment.
+        if (interrogatorConnectionModalTimeout) {
+            clearTimeout(interrogatorConnectionModalTimeout);
+            interrogatorConnectionModalTimeout = null;
+        }
 
         // Hide modal
         interrogatorConnectionModal.style.display = 'none';
@@ -3054,14 +3129,42 @@ Thank you again for your participation!
         }
         document.getElementById('timer-display').style.display = 'none';
 
-        // Go directly to feedback form (skip rating - no new response to evaluate)
-        showMainPhase('feedback');
+        // Honor the label: take them to the final assessment (collect the rating).
+        const partnerMessageCount = messageList.querySelectorAll('.message-bubble.assistant').length;
+        const assessmentPending = assessmentAreaDiv.style.display === 'block'
+            && binaryChoiceSection.style.display === 'block' && binaryChoice === null;
 
-        logToRailway({
-            type: 'INTERROGATOR_PROCEEDED_TO_FEEDBACK',
-            message: 'Interrogator clicked continue on connection modal - showing feedback form',
-            context: { role: currentRole }
-        });
+        if (partnerMessageCount === 0) {
+            // Nothing to judge (defensive — modal normally only shows with >=1 partner message)
+            showMainPhase('feedback');
+            logToRailway({
+                type: 'INTERROGATOR_PROCEEDED_TO_FEEDBACK',
+                message: 'Connection modal continue with no partner message - feedback',
+                context: { role: currentRole }
+            });
+        } else if (assessmentPending) {
+            // Assessment already on screen — keep it, just set the final title.
+            const assessmentTitle = assessmentAreaDiv.querySelector('h4');
+            if (assessmentTitle) {
+                assessmentTitle.textContent = "Your partner has disconnected. Please make your final assessment:";
+                assessmentTitle.style.display = 'block';
+            }
+            logToRailway({
+                type: 'INTERROGATOR_CONTINUE_TO_PENDING_ASSESSMENT',
+                message: 'Connection modal continue - kept pending final assessment visible',
+                context: { role: currentRole }
+            });
+        } else {
+            showInterrogatorFinalAssessment(
+                finalResponseReason || 'partner_connection_issue',
+                'Your partner disconnected. Please make your final assessment:'
+            );
+            logToRailway({
+                type: 'INTERROGATOR_CONTINUE_TO_FINAL_ASSESSMENT',
+                message: 'Connection modal continue - showing final assessment to collect rating',
+                context: { role: currentRole }
+            });
+        }
     });
 
     // NEW: AI connection failure modal button - handles both scenarios
@@ -3078,22 +3181,13 @@ Thank you again for your participation!
             const aiMessageCount = messageList.querySelectorAll('.message-bubble.assistant').length;
 
             if (aiMessageCount === 0) {
-                // AI never responded — not participant's fault, redirect with TIMED_OUT code
+                // AI never responded — technical/system fault, not the participant's.
                 logToRailway({
                     type: 'AI_FAILURE_NO_MESSAGES',
-                    message: 'AI connection failed and never sent any messages - redirecting to Prolific timeout',
+                    message: 'AI connection failed and never sent any messages - redirecting to Prolific',
                     context: { scenario: 'end_study', aiMessageCount: 0 }
                 });
-
-                recordTimeoutToDatabase('ai_connection_no_messages');
-
-                prepareIntentionalRedirect();
-                recordCompletionCode('C1B54A7Q');
-                if (isProduction) {
-                    window.location.href = PROLIFIC_TIMED_OUT_URL;
-                } else {
-                    alert('DEV MODE: AI never responded - would redirect to Prolific timeout URL');
-                }
+                endStudyWithScenario('technical_issue', 'ai_connection_no_messages');
                 return;
             }
 
@@ -3615,6 +3709,50 @@ Thank you again for your participation!
         return false;
     }
 
+    // C3: persist the interrogator's FINAL binary direction immediately (retry + beacon),
+    // so it survives even if they never move the confidence slider or lose connection.
+    // Confidence + collected=true arrive later via /submit_rating (is_final_response).
+    async function submitInterrogatorFinalChoiceWithRetry(choice, reason) {
+        if (!sessionId) return false;
+        const payload = {
+            session_id: sessionId,
+            binary_choice: choice,
+            binary_choice_time_ms: binaryChoiceTime,
+            final_response_reason: reason || finalResponseReason || 'interrogator_final_choice_click'
+        };
+        for (let attempt = 1; attempt <= 2; attempt++) {
+            try {
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 10000);
+                const response = await fetch('/submit_interrogator_final_choice', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload),
+                    signal: controller.signal
+                });
+                clearTimeout(timeoutId);
+                if (response.ok) return true;
+            } catch (error) {
+                logToRailway({
+                    type: 'INTERROGATOR_FINAL_CHOICE_SAVE_ERROR',
+                    message: error.message,
+                    context: { attempt, choice, reason: payload.final_response_reason }
+                });
+            }
+        }
+        try {
+            const blob = new Blob([JSON.stringify(payload)], { type: 'application/json' });
+            navigator.sendBeacon(`${API_BASE_URL}/submit_interrogator_final_choice`, blob);
+        } catch (error) {
+            logToRailway({
+                type: 'INTERROGATOR_FINAL_CHOICE_BEACON_ERROR',
+                message: error.message,
+                context: { choice, reason: payload.final_response_reason }
+            });
+        }
+        return false;
+    }
+
     async function handleBinaryChoice(choice) {
         // PROTECTION: Prevent double-clicking - only process first click
         if (binaryChoiceInProgress) {
@@ -3680,6 +3818,14 @@ Thank you again for your participation!
         }
 
         // INTERROGATOR: Show confidence slider
+        // C3: if this is the FINAL assessment, persist the binary direction NOW (before the
+        // slider) so it survives even if they stall on the slider or lose connection.
+        const isFinalAssessment = !!finalResponseReason || timeExpired || partnerDroppedFlag;
+        if (isFinalAssessment) {
+            submitInterrogatorFinalChoiceWithRetry(
+                choice, finalResponseReason || (timeExpired ? 'time_expired' : 'final_choice')
+            ); // fire-and-forget; confidence completes it via /submit_rating
+        }
         // Hide binary choice, show confidence slider
         binaryChoiceSection.style.display = 'none';
         confidenceSection.style.display = 'block';
@@ -4089,6 +4235,8 @@ Thank you again for your participation!
 
         // Clear inactivity timer — user is actively participating
         clearConversationInactivityTimer();
+        // A1: sending cancels the AI-mode post-expiry backstop (no-op outside that case).
+        clearScreenTimer();
 
         // NEW: Calculate message composition time
         let messageCompositionTimeSeconds = null;
@@ -4413,50 +4561,72 @@ Thank you again for your participation!
             }
         });
 
-        try {
-            // Create AbortController for timeout
-            const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 seconds for rating submission
+        // C2: the final rating is irreplaceable — retry it, and beacon as a last resort.
+        const isFinal = timeExpired || partnerDroppedFlag || !!finalResponseReason;
+        const ratingPayload = {
+            session_id: sessionId,
+            binary_choice: binaryChoice, // 'human' or 'ai'
+            binary_choice_time_ms: binaryChoiceTime, // Time taken to make binary choice
+            confidence: confidence, // 0-1 scale (converted from 0-100)
+            confidence_percent: confidencePercent, // 0-100 scale (original)
+            decision_time_seconds: decisionTimeSeconds,
+            reading_time_seconds: readingTimeSeconds,
+            active_decision_time_seconds: activeDecisionTimeSeconds,
+            slider_interaction_log: sliderInteractionLog,
+            is_final_response: isFinal,
+            final_response_reason: finalResponseReason || (timeExpired ? 'time_expired' : null)
+        };
 
-            const response = await fetch('/submit_rating', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    session_id: sessionId,
-                    binary_choice: binaryChoice, // 'human' or 'ai'
-                    binary_choice_time_ms: binaryChoiceTime, // Time taken to make binary choice
-                    confidence: confidence, // 0-1 scale (converted from 0-100)
-                    confidence_percent: confidencePercent, // 0-100 scale (original)
-                    decision_time_seconds: decisionTimeSeconds,
-                    reading_time_seconds: readingTimeSeconds,
-                    active_decision_time_seconds: activeDecisionTimeSeconds,
-                    slider_interaction_log: sliderInteractionLog,
-                    is_final_response: timeExpired || partnerDroppedFlag || !!finalResponseReason,
-                    final_response_reason: finalResponseReason || (timeExpired ? 'time_expired' : null)
-                }),
-                signal: controller.signal
-            });
-            
-            clearTimeout(timeoutId);
-            const result = await response.json();
-            // Log to Railway only
-            logToRailway({
-                type: 'RATING_RESPONSE',
-                message: 'Rating submission response from server',
-                context: {
-                    study_over: result.study_over,
-                    response_ok: response.ok
+        let result = null, ok = false, usedBeacon = false;
+        const maxAttempts = isFinal ? 2 : 1; // retries only matter for the final submit
+        for (let attempt = 1; attempt <= maxAttempts && !ok; attempt++) {
+            try {
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 30000); // 30s for rating submission
+                const response = await fetch('/submit_rating', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(ratingPayload),
+                    signal: controller.signal
+                });
+                clearTimeout(timeoutId);
+                if (response.ok) {
+                    result = await response.json();
+                    ok = true;
                 }
-            });
+            } catch (error) {
+                logToRailway({
+                    type: 'RATING_SUBMIT_ATTEMPT_FAILED',
+                    message: error.message,
+                    context: { attempt, isFinal }
+                });
+            }
+        }
 
-            if (response.ok) {
+        if (!ok && isFinal) {
+            // Total fetch failure on the final rating — beacon it so it still reaches the server.
+            try {
+                navigator.sendBeacon(`${API_BASE_URL}/submit_rating`,
+                    new Blob([JSON.stringify(ratingPayload)], { type: 'application/json' }));
+                usedBeacon = true;
+            } catch (error) {}
+        }
+
+        logToRailway({
+            type: 'RATING_RESPONSE',
+            message: 'Rating submission outcome',
+            context: { ok, usedBeacon, study_over: result ? result.study_over : null, isFinal }
+        });
+
+        try {
+            if (ok && result) {
                 if (result.study_over) {
                     // Clean up timer
                     if (studyTimer) {
                         clearInterval(studyTimer);
                     }
                     document.getElementById('timer-display').style.display = 'none';
-                    
+
                     // MODIFICATION START
                     finalSummaryData = result.session_data_summary; // Store data
                     showMainPhase('feedback'); // Go to feedback phase first
@@ -4508,16 +4678,18 @@ Thank you again for your participation!
                         updateTimerMessage();
                     }
                 }
+            } else if (usedBeacon) {
+                // C2: final rating was beaconed — assume accepted (server banner confirms) and advance.
+                if (studyTimer) {
+                    clearInterval(studyTimer);
+                }
+                document.getElementById('timer-display').style.display = 'none';
+                showMainPhase('feedback');
             } else {
-                // SILENT: No participant-visible error - logged to Railway only
+                // Non-final failure — allow retry (today's behavior).
                 submitRatingButton.disabled = false;
                 confidenceSlider.disabled = false;
             }
-        } catch (error) {
-            // SILENT: No participant-visible error - logged to Railway only
-            // Error already logged to Railway if needed
-            submitRatingButton.disabled = false;
-            confidenceSlider.disabled = false;
         } finally {
             ratingLoadingDiv.style.display = 'none';
         }
