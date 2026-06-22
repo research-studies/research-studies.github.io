@@ -249,6 +249,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let binaryChoice = null; // 'human' or 'ai'
     let binaryChoiceTime = null; // Time taken to make binary choice
     let finalResponseReason = null; // Why the current final judgment is being collected
+    let witnessBinaryShown = false; // #1 guard: ignore repeat witness final routing so an in-progress/submitted final isn't reset
     let buttonOrderRandomized = false; // For counterbalancing (currently disabled)
 
     // NEW: Enhanced reaction time tracking variables
@@ -2955,6 +2956,19 @@ Thank you again for your participation!
 
     // Route witness directly to binary choice (no modal)
     function showWitnessBinaryChoice(reason) {
+        // #1 guard: this can be called twice — once by the witness's own 7.5-min timer
+        // ('time_expired') and again by the partner-drop detector ('partner_dropped_*'). The second
+        // call would reset binaryChoiceInProgress/finalResponseReason and re-render the buttons
+        // mid-submit, clobbering an in-flight final. First call wins; ignore any later re-route.
+        if (witnessBinaryShown) {
+            logToRailway({
+                type: 'WITNESS_BINARY_REROUTE_IGNORED',
+                message: 'Ignored repeat witness binary-choice routing (final already shown)',
+                context: { existingReason: finalResponseReason, newReason: reason }
+            });
+            return;
+        }
+        witnessBinaryShown = true;
         finalResponseReason = reason;
         logUiEvent('witness_routed_to_binary_choice', { reason });
 
