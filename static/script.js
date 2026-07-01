@@ -417,17 +417,24 @@ document.addEventListener('DOMContentLoaded', () => {
     // completion codes and swap the `code` values below; several currently reuse the configured
     // "timed out" code (C1B54A7Q) so payments keep working until new codes are created.
     const PROLIFIC_COMPLETE_BASE = "https://app.prolific.com/submissions/complete?cc=";
-    const postStudyCode = () => (urlVersion === '2' ? 'CNEGS1RX' : 'C12UYMCR'); // condition-specific
+    const postStudyCode = () => (urlVersion === '2' ? 'CNEGS1RX' : 'C12UYMCR'); // condition-specific (completed the task)
+    // Prolific completion codes grouped by how the submission should be handled (see EXIT_SCENARIOS `fault`):
+    //   SYSTEM_FAULT_CODE       — no-fault non-completion (no match / connection / technical) -> approve & pay.
+    //   PARTICIPANT_INACTIVE_CODE — participant went inactive/abandoned -> your discretion (review before approving).
+    // TODO(prolific): create a NEW completion code in the study for the inactive group and paste it below.
+    //   It intentionally defaults to SYSTEM_FAULT_CODE so no participant ever receives an invalid code if not yet set.
+    const SYSTEM_FAULT_CODE = 'C1B54A7Q';
+    const PARTICIPANT_INACTIVE_CODE = 'C1B54A7Q'; // <-- replace with the new Prolific code (e.g. 'CXXXXXXXX')
     const EXIT_SCENARIOS = {
         // --- Pre-conversation, participant inactive (their action needed) ---
-        consent_timeout:         { title: "Session timed out",  fault: "participant", code: 'C1B54A7Q', body: "You didn't continue past the consent screen in time, so the session has ended." },
-        instructions_timeout:    { title: "Session timed out",  fault: "participant", code: 'C1B54A7Q', body: "You were inactive on the instructions for too long, so the session has ended." },
-        pre_chat_timeout:        { title: "Session timed out",  fault: "participant", code: 'C1B54A7Q', body: "You were inactive before the conversation began, so the session has ended." },
-        conversation_inactivity: { title: "Conversation ended", fault: "participant", code: 'C1B54A7Q', body: "You were inactive during the conversation for too long, so it ended early." },
+        consent_timeout:         { title: "Session timed out",  fault: "participant", code: PARTICIPANT_INACTIVE_CODE, body: "You didn't continue past the consent screen in time, so the session has ended." },
+        instructions_timeout:    { title: "Session timed out",  fault: "participant", code: PARTICIPANT_INACTIVE_CODE, body: "You were inactive on the instructions for too long, so the session has ended." },
+        pre_chat_timeout:        { title: "Session timed out",  fault: "participant", code: PARTICIPANT_INACTIVE_CODE, body: "You were inactive before the conversation began, so the session has ended." },
+        conversation_inactivity: { title: "Conversation ended", fault: "participant", code: PARTICIPANT_INACTIVE_CODE, body: "You were inactive during the conversation for too long, so it ended early." },
         // --- System / bad luck (explicitly reassure: not their fault, still paid) ---
-        no_match:                { title: "No partner available",          fault: "system", code: 'C1B54A7Q', body: "We couldn't match you with a partner in time. This is not your fault — you will still be paid for your time." },
-        backend_cleanup:         { title: "Connection lost while waiting", fault: "system", code: 'C1B54A7Q', body: "We lost your connection while you were waiting to be matched. This is not your fault — you will still be paid for your time." },
-        technical_issue:         { title: "Technical issue",               fault: "system", code: 'C1B54A7Q', body: "A technical problem interrupted the study before it could finish. This is not your fault — you will still be paid for your time." },
+        no_match:                { title: "No partner available",          fault: "system", code: SYSTEM_FAULT_CODE, body: "We couldn't match you with a partner in time. This is not your fault — you will still be paid for your time." },
+        backend_cleanup:         { title: "Connection lost while waiting", fault: "system", code: SYSTEM_FAULT_CODE, body: "We lost your connection while you were waiting to be matched. This is not your fault — you will still be paid for your time." },
+        technical_issue:         { title: "Technical issue",               fault: "system", code: SYSTEM_FAULT_CODE, body: "A technical problem interrupted the study before it could finish. This is not your fault — you will still be paid for your time." },
         // --- Post-conversation (finished the task; reassure they're paid) ---
         demographics_timeout:    { title: "Survey timed out", fault: "post", codeFn: postStudyCode, body: "You completed the conversation, but the final survey timed out. You have completed the task and will be paid." },
         post_study_issue:        { title: "Thanks for completing the conversation", fault: "post", codeFn: postStudyCode, body: "There was an issue capturing your final response, but you have completed the task and will be paid. You'll be redirected shortly." },
@@ -4577,6 +4584,8 @@ Thank you again for your participation!
 
         // C2: the final rating is irreplaceable — retry it, and beacon as a last resort.
         const isFinal = timeExpired || partnerDroppedFlag || !!finalResponseReason;
+        // reading-activity counters are valid for this turn only if they belong to the current message
+        const _raValid = (readingActivityBase === tsToMs(aiResponseTimestamp));
         const ratingPayload = {
             session_id: sessionId,
             binary_choice: binaryChoice, // 'human' or 'ai'
@@ -4587,6 +4596,13 @@ Thank you again for your participation!
             reading_time_seconds: readingTimeSeconds,
             active_decision_time_seconds: activeDecisionTimeSeconds,
             slider_interaction_log: sliderInteractionLog,
+            // reading-phase engagement (null/0 if no such event before first slider touch this turn)
+            reading_first_mouse_move_ms: _raValid ? firstMouseMoveMs : null,
+            reading_first_scroll_ms: _raValid ? firstScrollMs : null,
+            reading_first_keypress_ms: _raValid ? firstKeypressMs : null,
+            reading_mouse_move_count: _raValid ? readingMouseMoveCount : 0,
+            reading_scroll_count: _raValid ? readingScrollCount : 0,
+            reading_keypress_count: _raValid ? readingKeypressCount : 0,
             is_final_response: isFinal,
             final_response_reason: finalResponseReason || (timeExpired ? 'time_expired' : null)
         };
@@ -4980,6 +4996,30 @@ Thank you again for your participation!
         pageInactiveStartTime = null;
         return lastPageInactivityDurationMs;
     }
+
+    // NEW: reading-phase engagement telemetry — mouse/scroll/key BEFORE first slider touch.
+    // Self-resets per assessment turn (keyed on aiResponseTimestamp); only counts the
+    // reading window (confidenceStartTime === null). first_*_ms are relative to message appearance (baseMs).
+    let readingActivityBase = null;
+    let firstMouseMoveMs = null, firstScrollMs = null, firstKeypressMs = null;
+    let readingMouseMoveCount = 0, readingScrollCount = 0, readingKeypressCount = 0;
+    function noteReadingActivity(kind) {
+        const baseMs = tsToMs(aiResponseTimestamp);
+        if (!baseMs) return;
+        if (readingActivityBase !== baseMs) { // new assessment turn -> reset
+            readingActivityBase = baseMs;
+            firstMouseMoveMs = firstScrollMs = firstKeypressMs = null;
+            readingMouseMoveCount = readingScrollCount = readingKeypressCount = 0;
+        }
+        if (confidenceStartTime !== null) return; // reading window only (pre first-touch)
+        const dt = Date.now() - baseMs;
+        if (kind === 'mouse') { readingMouseMoveCount++; if (firstMouseMoveMs === null) firstMouseMoveMs = dt; }
+        else if (kind === 'scroll') { readingScrollCount++; if (firstScrollMs === null) firstScrollMs = dt; }
+        else { readingKeypressCount++; if (firstKeypressMs === null) firstKeypressMs = dt; }
+    }
+    document.addEventListener('mousemove', () => noteReadingActivity('mouse'), { passive: true });
+    document.addEventListener('scroll', () => noteReadingActivity('scroll'), { passive: true, capture: true });
+    document.addEventListener('keydown', () => noteReadingActivity('key'), { passive: true });
 
     // NEW: Tab visibility tracking
     document.addEventListener('visibilitychange', () => {
