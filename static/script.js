@@ -4585,7 +4585,9 @@ Thank you again for your participation!
         // C2: the final rating is irreplaceable — retry it, and beacon as a last resort.
         const isFinal = timeExpired || partnerDroppedFlag || !!finalResponseReason;
         // reading-activity counters are valid for this turn only if they belong to the current message
-        const _raValid = (readingActivityBase === tsToMs(aiResponseTimestamp));
+        const _raBase = tsToMs(aiResponseTimestamp);
+        const _raValid = (readingActivityBase === _raBase);
+        submittedBase = _raBase; // stop trajectory sampling for this turn
         const ratingPayload = {
             session_id: sessionId,
             binary_choice: binaryChoice, // 'human' or 'ai'
@@ -4603,6 +4605,7 @@ Thank you again for your participation!
             reading_mouse_move_count: _raValid ? readingMouseMoveCount : 0,
             reading_scroll_count: _raValid ? readingScrollCount : 0,
             reading_keypress_count: _raValid ? readingKeypressCount : 0,
+            mouse_trajectory: _raValid ? mouseTrajectory : [], // [x,y,ms-from-appearance] sampled ~20Hz over the assessment phase
             is_final_response: isFinal,
             final_response_reason: finalResponseReason || (timeExpired ? 'time_expired' : null)
         };
@@ -5003,6 +5006,8 @@ Thank you again for your participation!
     let readingActivityBase = null;
     let firstMouseMoveMs = null, firstScrollMs = null, firstKeypressMs = null;
     let readingMouseMoveCount = 0, readingScrollCount = 0, readingKeypressCount = 0;
+    // NEW: mouse-trajectory sampling across the whole assessment phase (msg appearance -> submit)
+    let mouseTrajectory = [], lastTrajSampleMs = 0, submittedBase = null;
     function noteReadingActivity(kind) {
         const baseMs = tsToMs(aiResponseTimestamp);
         if (!baseMs) return;
@@ -5010,6 +5015,7 @@ Thank you again for your participation!
             readingActivityBase = baseMs;
             firstMouseMoveMs = firstScrollMs = firstKeypressMs = null;
             readingMouseMoveCount = readingScrollCount = readingKeypressCount = 0;
+            mouseTrajectory = []; lastTrajSampleMs = 0;
         }
         if (confidenceStartTime !== null) return; // reading window only (pre first-touch)
         const dt = Date.now() - baseMs;
@@ -5017,7 +5023,16 @@ Thank you again for your participation!
         else if (kind === 'scroll') { readingScrollCount++; if (firstScrollMs === null) firstScrollMs = dt; }
         else { readingKeypressCount++; if (firstKeypressMs === null) firstKeypressMs = dt; }
     }
-    document.addEventListener('mousemove', () => noteReadingActivity('mouse'), { passive: true });
+    document.addEventListener('mousemove', (e) => {
+        noteReadingActivity('mouse');
+        const baseMs = tsToMs(aiResponseTimestamp);
+        if (!baseMs || submittedBase === baseMs) return; // stop after submit until next turn
+        const now = Date.now();
+        if (now - lastTrajSampleMs >= 50) { // throttle ~20 Hz
+            lastTrajSampleMs = now;
+            mouseTrajectory.push([Math.round(e.clientX), Math.round(e.clientY), now - baseMs]);
+        }
+    }, { passive: true });
     document.addEventListener('scroll', () => noteReadingActivity('scroll'), { passive: true, capture: true });
     document.addEventListener('keydown', () => noteReadingActivity('key'), { passive: true });
 
