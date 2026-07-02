@@ -4358,6 +4358,13 @@ Thank you again for your participation!
 
             // NEW: Check if this is a human partner conversation
             if (result.human_partner) {
+                // Partner gone (dropped / server redeploy). The backend refuses to substitute an AI
+                // reply in the human condition, so route to the dropout flow instead of waiting on a
+                // dead partner or rendering a bot message.
+                if (result.partner_unavailable) {
+                    handlePartnerDropout('left');
+                    return;
+                }
                 // Message routed to partner - now wait for their response
                 waitingForPartner = true;
                 currentTurn = result.turn;
