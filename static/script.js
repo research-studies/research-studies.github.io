@@ -475,6 +475,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let tabHiddenStartTime = null;
     let cumulativeTabHiddenMs = 0;
     let turnTabHiddenInstances = []; // per-instance hidden durations (ms) within the current turn window
+    let pendingRatingBeacon = null;  // FIX D1b: unconfirmed rating payload, beaconed on pagehide
     let suspiciousBehaviorTrackingEnabled = false;
     let pageInactiveStartTime = null;
     let lastPageInactivityDurationMs = 0;
@@ -2147,6 +2148,13 @@ document.addEventListener('DOMContentLoaded', () => {
                         finalResponseReason = null;
                         choiceHumanButton.disabled = false; // Re-enable buttons
                         choiceAiButton.disabled = false;
+
+                        // FIX C4-gap (03Aug26): same rescue as the AI path — post-expiry
+                        // assessment is final; arm the backstop so a stall can't strand them.
+                        if (timeExpired) {
+                            finalResponseReason = finalResponseReason || 'time_expired';
+                            armInterrogatorFinalAssessmentBackstop();
+                        }
                     } else {
                         // Witness - enable message input
                         witnessWaitingUI.style.display = 'none';  // Hide waiting spinner
@@ -4421,6 +4429,15 @@ Thank you again for your participation!
             choiceHumanButton.disabled = false; // Re-enable buttons
             choiceAiButton.disabled = false;
 
+            // FIX C4-gap (03Aug26): if the timer already expired, THIS assessment is the
+            // final one — arm the same 2-min rescue backstop the other final paths have,
+            // so a participant who clicks a choice then stalls is saved + redirected
+            // instead of stranded (found live: L3 walk-away test).
+            if (timeExpired) {
+                finalResponseReason = finalResponseReason || 'time_expired';
+                armInterrogatorFinalAssessmentBackstop();
+            }
+
             // Reset timing variables for this turn
             confidenceStartTime = null;
             sliderInteractionLog = [];
@@ -4637,6 +4654,10 @@ Thank you again for your participation!
             final_response_reason: finalResponseReason || (timeExpired ? 'time_expired' : null)
         };
 
+        // FIX D1b (03Aug26): protect the in-flight rating against instant tab-close.
+        // Stashed now, cleared on server confirmation; the pagehide handler beacons
+        // any unconfirmed payload. Server dedupes by turn, so double-delivery is safe.
+        pendingRatingBeacon = JSON.stringify(ratingPayload);
         let result = null, ok = false, usedBeacon = false;
         const maxAttempts = 2; // 01Aug26: retry non-final ratings too (server now replaces duplicates by turn, so a re-send is safe)
         for (let attempt = 1; attempt <= maxAttempts && !ok; attempt++) {
@@ -4653,6 +4674,7 @@ Thank you again for your participation!
                 if (response.ok) {
                     result = await response.json();
                     ok = true;
+                    pendingRatingBeacon = null;   // confirmed saved; nothing to rescue
                 }
             } catch (error) {
                 logToRailway({
@@ -5086,6 +5108,19 @@ Thank you again for your participation!
                 });
                 tabHiddenStartTime = null;
             }
+        }
+    });
+
+    // FIX D1b (03Aug26): if the tab dies while a rating is mid-flight, fire it as a
+    // beacon (text/plain body avoids a CORS preflight during unload; the backend
+    // parses the JSON body regardless, and dedupes by turn if both copies arrive).
+    window.addEventListener('pagehide', () => {
+        if (pendingRatingBeacon) {
+            try {
+                navigator.sendBeacon(`${API_BASE_URL}/submit_rating`,
+                    new Blob([pendingRatingBeacon], { type: 'text/plain' }));
+            } catch (e) {}
+            pendingRatingBeacon = null;
         }
     });
 
