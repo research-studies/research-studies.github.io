@@ -2705,7 +2705,7 @@ What You Will Be Asked to Do
 If you agree to participate, you will:
 - Engage in a text-based conversation with another person or with a Large Language Model (such as Chat-GPT)
 - Determine if you're talking to a human or an AI each turn
-- Rate your confidence in each decision using a sliding scale (0 = not at all confident, 100 = extremely confident)
+- Rate your confidence in that guess on a sliding scale (0% = completely guessing, 100% = completely certain)
 - Provide a comment about your experience at the end of the conversation
 - Complete a brief demographic questionnaire at the end
 - The total time commitment will be approximately 15 minutes
