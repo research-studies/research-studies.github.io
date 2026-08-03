@@ -474,6 +474,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // NEW: Tab visibility tracking
     let tabHiddenStartTime = null;
     let cumulativeTabHiddenMs = 0;
+    let turnTabHiddenInstances = []; // per-instance hidden durations (ms) within the current turn window
     let suspiciousBehaviorTrackingEnabled = false;
     let pageInactiveStartTime = null;
     let lastPageInactivityDurationMs = 0;
@@ -1042,7 +1043,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
                                     addMessageToUI(result.message_text, 'assistant');
                                     currentTurn = result.turn;
+                                    // FIX F5 (01Aug26): anchor timing to THIS message's delivery —
+                                    // previously left at the previous message's stamp, inflating
+                                    // reading/decision time for this final turn
+                                    aiResponseTimestamp = result.timestamp;
                                     waitingForPartner = false;
+                                    cumulativeTabHiddenMs = 0;
+                                    turnTabHiddenInstances = [];
                                     typingIndicator.style.display = 'none';
 
                                     assessmentAreaDiv.style.display = 'block';
@@ -2069,27 +2076,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 // NEW: Handle artificial delay (partner_typing from check_partner_message)
                 // This signals partner sent message but it's being artificially delayed
-                if (result.partner_typing) {
+                // HARMONIZED (Jones et al. 2025): the indicator display is scripted by the
+                // post-send timer and stopped on delivery — NEVER driven by the partner's
+                // real typing, so its texture carries no witness-type information.
+                // Real typing / delay signals are used ONLY to reset the inactivity timer.
+                if (result.partner_typing || typingResult.is_typing) {
                     lastActivityTime = Date.now(); // Reset timer - partner is active
-                    // Start intermittent bubbles if not already running
-                    if (!isShowingIntermittentBubbles) {
-                        startIntermittentBubbles();
-                    }
-                } else {
-                    // Stop intermittent bubbles if they were running
-                    if (isShowingIntermittentBubbles) {
-                        stopIntermittentBubbles();
-                    }
-
-                    // Update typing indicator based on partner's REAL typing status
-                    // IMPORTANT: If partner is typing, reset inactivity timer (they're still active!)
-                    if (typingResult.is_typing) {
-                        lastActivityTime = Date.now(); // Reset timer - partner is active
-                        typingIndicator.style.display = 'flex';
-                        scrollToBottom();
-                    } else {
-                        typingIndicator.style.display = 'none';
-                    }
                 }
 
                 if (result.new_message) {
@@ -2123,6 +2115,11 @@ document.addEventListener('DOMContentLoaded', () => {
                     currentTurn = result.turn;
                     aiResponseTimestamp = result.timestamp;
                     waitingForPartner = false;
+
+                    // Reset tab-visibility tracking for the new turn (01Aug26: parity with
+                    // the AI path — previously the human path never reset these)
+                    cumulativeTabHiddenMs = 0;
+                    turnTabHiddenInstances = [];
 
                     // Hide typing indicator (important for clean UI)
                     typingIndicator.style.display = 'none';
@@ -2285,6 +2282,9 @@ document.addEventListener('DOMContentLoaded', () => {
     async function handlePartnerDropout(reason = 'timeout') {
         // reason: 'left' = partner closed browser, 'timeout' = 2-min inactivity
         logUiEvent('partner_dropped', { reason });
+
+        // Kill any scripted typing animation so bubbles can't flicker under the dropout modal
+        stopIntermittentBubbles();
 
         // Stop partner polling
         if (partnerPollInterval) {
@@ -2705,7 +2705,7 @@ What You Will Be Asked to Do
 If you agree to participate, you will:
 - Engage in a text-based conversation with another person or with a Large Language Model (such as Chat-GPT)
 - Determine if you're talking to a human or an AI each turn
-- Rate your confidence about whether you believe you are talking to a human or an AI using a sliding scale (0 = definitely human, 1 = definitely AI)
+- Rate your confidence in each decision using a sliding scale (0 = not at all confident, 100 = extremely confident)
 - Provide a comment about your experience at the end of the conversation
 - Complete a brief demographic questionnaire at the end
 - The total time commitment will be approximately 15 minutes
@@ -3075,6 +3075,9 @@ Thank you again for your participation!
         binaryChoiceStartTime = Date.now();
         binaryChoiceTime = null;
         binaryChoiceInProgress = false;
+        // 01Aug26: scope tab-visibility tracking to the final-assessment window
+        cumulativeTabHiddenMs = 0;
+        turnTabHiddenInstances = [];
         binaryChoiceSection.style.display = 'block';
         confidenceSection.style.display = 'none';
         choiceHumanButton.disabled = false;
@@ -4324,22 +4327,28 @@ Thank you again for your participation!
         chatInputContainer.style.display = 'none';
         assessmentAreaDiv.style.display = 'none';
 
-        // NEW: No typing indicator for human-human conversations (both roles)
-        const indicatorDelay = isHumanPartner ? 0 : Math.random() * (7000 - 5000) + 5000;
-        
+        // HARMONIZED (Jones et al. 2025): the typing animation is scripted and IDENTICAL
+        // across conditions — triggered 2 + U(0,3)s after send in BOTH modes, independent
+        // of witness type and of the partner's real typing. Runs until delivery.
+        const indicatorDelay = 2000 + Math.random() * 3000;
+
         // Log to Railway only
         logToRailway({
             type: 'TYPING_INDICATOR_DEBUG',
             message: `Waiting ${(indicatorDelay/1000).toFixed(1)}s before showing typing indicator`,
             context: { delay_seconds: indicatorDelay/1000 }
         });
-        
+
         setTimeout(() => {
-            if (assessmentAreaDiv.style.display === 'none' && chatInputContainer.style.display === 'none' && !isHumanPartner) {
-                // Start the typing animation (AI mode only)
-                animateTypingIndicator(messageText.length);
-                // Update timer message for State 1→2 transition (now waiting for AI response)
-                updateTimerMessage();
+            if (assessmentAreaDiv.style.display === 'none' && chatInputContainer.style.display === 'none') {
+                // Same intermittent animation in both modes; stopped on message delivery
+                if (!isShowingIntermittentBubbles) {
+                    startIntermittentBubbles();
+                }
+                if (!isHumanPartner) {
+                    // Update timer message for State 1→2 transition (now waiting for AI response)
+                    updateTimerMessage();
+                }
             }
         }, indicatorDelay);
 
@@ -4354,6 +4363,7 @@ Thank you again for your participation!
 
             // If we get here, the retry succeeded - hide typing indicator and process response
             typingIndicator.dataset.runId = String((Number(typingIndicator.dataset.runId) || 0) + 1);
+            stopIntermittentBubbles();
             typingIndicator.style.display = 'none';
 
             // NEW: Check if this is a human partner conversation
@@ -4377,34 +4387,16 @@ Thank you again for your participation!
             // AI response (normal flow)
             addMessageToUI(result.ai_response, 'assistant');
 
-            // NEW: Add backend retry time and attempts to totals
-            const backendRetryData = result.backend_retry_metadata || { retry_attempts: 0, retry_time_seconds: 0 };
-            const totalNetworkDelaySeconds = networkDelaySeconds + backendRetryData.retry_time_seconds;
-            const totalAttempts = attempts + backendRetryData.retry_attempts;
-
-            // Update the backend with TOTAL network delay data AND TOTAL send attempts using retry logic
-            const updateResult = await updateNetworkDelayWithRetry(sessionId, result.turn, totalNetworkDelaySeconds, totalAttempts);
-            
-            if (!updateResult.success) {
-                // All retries failed - data is stored in pendingNetworkDelayUpdates for later processing
-                logToRailway({
-                    type: 'NETWORK_DELAY_FINAL_FAILURE',
-                    message: 'Network delay update failed after all retries - stored for fallback',
-                    context: {
-                        network_delay_seconds: networkDelaySeconds,
-                        turn: result.turn,
-                        session_id: sessionId,
-                        pending_fallbacks: pendingNetworkDelayUpdates.length,
-                        metadata: updateResult.metadata
-                    }
-                });
-            }
-            
+            // FIX (01Aug26): the assessment UI + RT clock now start IMMEDIATELY after the
+            // message renders — the network-delay telemetry POST (moved below) used to sit
+            // between them, deflating AI-condition binary RTs relative to the human
+            // condition, where message and clock start in the same tick.
             currentTurn = result.turn;
             aiResponseTimestamp = result.timestamp;
 
             // Reset tab visibility tracking for new turn
             cumulativeTabHiddenMs = 0;
+            turnTabHiddenInstances = [];
 
             // --- MODIFIED: Binary choice + slider setup logic ---
             assessmentAreaDiv.style.display = 'block';
@@ -4442,6 +4434,28 @@ Thank you again for your participation!
             commentInputArea.style.display = 'none';
             feelsOffCommentTextarea.value = '';
             messageList.scrollTop = messageList.scrollHeight;
+
+            // Network-delay telemetry (moved here 01Aug26 — see FIX comment above):
+            // runs AFTER the assessment UI is live so it can never delay the RT clock.
+            const backendRetryData = result.backend_retry_metadata || { retry_attempts: 0, retry_time_seconds: 0 };
+            const totalNetworkDelaySeconds = networkDelaySeconds + backendRetryData.retry_time_seconds;
+            const totalAttempts = attempts + backendRetryData.retry_attempts;
+            const updateResult = await updateNetworkDelayWithRetry(sessionId, result.turn, totalNetworkDelaySeconds, totalAttempts);
+
+            if (!updateResult.success) {
+                // All retries failed - data is stored in pendingNetworkDelayUpdates for later processing
+                logToRailway({
+                    type: 'NETWORK_DELAY_FINAL_FAILURE',
+                    message: 'Network delay update failed after all retries - stored for fallback',
+                    context: {
+                        network_delay_seconds: networkDelaySeconds,
+                        turn: result.turn,
+                        session_id: sessionId,
+                        pending_fallbacks: pendingNetworkDelayUpdates.length,
+                        metadata: updateResult.metadata
+                    }
+                });
+            }
 
         } catch (error) {
             // If we reach here, all retries failed - log the final failure
@@ -4605,6 +4619,12 @@ Thank you again for your participation!
             reading_time_seconds: readingTimeSeconds,
             active_decision_time_seconds: activeDecisionTimeSeconds,
             slider_interaction_log: sliderInteractionLog,
+            // 01Aug26: tab-visibility data now rides the reliable, retried rating payload
+            // (per-instance durations enable the prereg's ">3s single instance" exclusion;
+            // the fire-and-forget ui-event stream remains as a redundant backup)
+            tab_hidden_instances_ms: turnTabHiddenInstances,
+            max_tab_hidden_instance_ms: turnTabHiddenInstances.length ? Math.max(...turnTabHiddenInstances) : 0,
+            cumulative_tab_hidden_ms: cumulativeTabHiddenMs,
             // reading-phase engagement (null/0 if no such event before first slider touch this turn)
             reading_first_mouse_move_ms: _raValid ? firstMouseMoveMs : null,
             reading_first_scroll_ms: _raValid ? firstScrollMs : null,
@@ -4618,7 +4638,7 @@ Thank you again for your participation!
         };
 
         let result = null, ok = false, usedBeacon = false;
-        const maxAttempts = isFinal ? 2 : 1; // retries only matter for the final submit
+        const maxAttempts = 2; // 01Aug26: retry non-final ratings too (server now replaces duplicates by turn, so a re-send is safe)
         for (let attempt = 1; attempt <= maxAttempts && !ok; attempt++) {
             try {
                 const controller = new AbortController();
@@ -5057,6 +5077,7 @@ Thank you again for your participation!
             if (tabHiddenStartTime) {
                 const hiddenDuration = Date.now() - tabHiddenStartTime;
                 cumulativeTabHiddenMs += hiddenDuration;
+                turnTabHiddenInstances.push(hiddenDuration);
                 logSuspiciousEvent('tab_visible', {
                     turn: currentTurn,
                     hidden_duration_ms: hiddenDuration,
