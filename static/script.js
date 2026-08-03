@@ -3729,7 +3729,7 @@ Thank you again for your participation!
         }
 
         try {
-            const blob = new Blob([JSON.stringify(payload)], { type: 'application/json' });
+            const blob = new Blob([JSON.stringify(payload)], { type: 'text/plain' });
             navigator.sendBeacon(`${API_BASE_URL}/submit_witness_final_choice`, blob);
         } catch (error) {
             logToRailway({
@@ -3773,7 +3773,7 @@ Thank you again for your participation!
             }
         }
         try {
-            const blob = new Blob([JSON.stringify(payload)], { type: 'application/json' });
+            const blob = new Blob([JSON.stringify(payload)], { type: 'text/plain' });
             navigator.sendBeacon(`${API_BASE_URL}/submit_interrogator_final_choice`, blob);
         } catch (error) {
             logToRailway({
@@ -4689,7 +4689,7 @@ Thank you again for your participation!
             // Total fetch failure on the final rating — beacon it so it still reaches the server.
             try {
                 navigator.sendBeacon(`${API_BASE_URL}/submit_rating`,
-                    new Blob([JSON.stringify(ratingPayload)], { type: 'application/json' }));
+                    new Blob([JSON.stringify(ratingPayload)], { type: 'text/plain' }));
                 usedBeacon = true;
             } catch (error) {}
         }
