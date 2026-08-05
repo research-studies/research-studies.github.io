@@ -1026,16 +1026,17 @@ document.addEventListener('DOMContentLoaded', () => {
                         }
                     } else if (isHumanPartner && waitingForPartner) {
                         // Human mode: waiting for partner response when timer expired.
-                        // One check to see if a message exists or is in transit.
+                        // FIX (04Aug26, T2.3): stop the concurrent 2s poll BEFORE firing this
+                        // one-shot fetch, and guard on turn below. Otherwise the poll and this
+                        // fetch could both deliver the same final message — resetting
+                        // binary_choice_time_ms (the DDM's primary observation) and drawing a
+                        // duplicate bubble on the decisive final turn.
+                        if (partnerPollInterval) { clearInterval(partnerPollInterval); partnerPollInterval = null; }
                         fetch(`/check_partner_message?session_id=${sessionId}`)
                             .then(r => r.json())
                             .then(result => {
-                                if (result.new_message) {
-                                    // Message ready now — kill poll, display it, show assessment
-                                    if (partnerPollInterval) {
-                                        clearInterval(partnerPollInterval);
-                                        partnerPollInterval = null;
-                                    }
+                                if (result.new_message && result.turn > currentTurn) {
+                                    // Message ready now — display it, show assessment
                                     stopBackgroundDropoutCheck();
                                     stopIntermittentBubbles();
                                     chatInputContainer.style.display = 'none';
