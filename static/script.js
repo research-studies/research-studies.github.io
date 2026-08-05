@@ -438,6 +438,10 @@ document.addEventListener('DOMContentLoaded', () => {
         // --- Post-conversation (finished the task; reassure they're paid) ---
         demographics_timeout:    { title: "Survey timed out", fault: "post", codeFn: postStudyCode, body: "You completed the conversation, but the final survey timed out. You have completed the task and will be paid." },
         post_study_issue:        { title: "Thanks for completing the conversation", fault: "post", codeFn: postStudyCode, body: "There was an issue capturing your final response, but you have completed the task and will be paid. You'll be redirected shortly." },
+        // Reload guard (04Aug26): participant reloaded AFTER entering the conversation. Can't restart
+        // (would strand their partner and reset their data). Their earlier data is preserved. Code
+        // CZSGWT2I is the abandon/review bucket — switch to an auto-pay code if you prefer.
+        already_in_study:        { title: "You've already started this study", fault: "post", code: 'CZSGWT2I', body: "This study can't be restarted once it has begun. Your earlier responses were saved, and you'll be paid for your participation. Redirecting you to Prolific." },
     };
 
     // Show the scenario's message, record it, then redirect (with a safety auto-continue).
@@ -1417,6 +1421,15 @@ document.addEventListener('DOMContentLoaded', () => {
             }
 
             const result = await response.json();
+
+            // RELOAD GUARD: participant already entered the conversation in a prior load.
+            // Do not re-consent or re-queue — route them to Prolific. Their partner is routed
+            // to finish separately (via the /report_abandonment beacon).
+            if (result.already_in_study) {
+                logToRailway({ type: 'RELOAD_BLOCKED', message: 'Already in study on reload; routing to Prolific', context: { participantId } });
+                endStudyWithScenario('already_in_study');
+                return false;
+            }
 
             // Store assigned role and social style
             assignedRole = result.role;
