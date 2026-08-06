@@ -236,6 +236,13 @@ document.addEventListener('DOMContentLoaded', () => {
     let assignedRole = null; // 'interrogator' or 'witness'
     let assignedSocialStyle = null; // Social style if witness (e.g., 'WARM', 'PLAYFUL')
     let assignedSocialStyleDescription = null; // Description text
+    // Participant-facing display label for the witness's assigned style. We STORE and SEND the raw
+    // code (TURING/BLAND) everywhere data goes; the witness only ever SEES this label, so the
+    // internal codename "TURING" (which could hint at a Turing test and break blinding) is never
+    // shown. All-caps to match the attention-check distractors, so the correct option cannot be
+    // singled out by formatting. BLAND falls through unchanged.
+    const WITNESS_STYLE_DISPLAY = { TURING: 'CASUAL' };
+    const styleLabel = (code) => WITNESS_STYLE_DISPLAY[code] || code;
 
     let sessionId = null; // Changed from localStorage.getItem('sessionId') to ensure clean start
     let currentTurn = 0;
@@ -308,11 +315,19 @@ document.addEventListener('DOMContentLoaded', () => {
     // Track active screen timers so we can clear them on navigation
     let currentScreenTimer = null;
     let currentScreenName = null; // Track which screen timer is for
+    let screenActivityHandler = null; // reset-on-activity listener for post-study data-entry screens
+    let lastScreenTimerBumpAt = 0;    // debounce so a burst of keystrokes doesn't thrash the timer
 
     function clearScreenTimer() {
         if (currentScreenTimer) {
             clearTimeout(currentScreenTimer);
             currentScreenTimer = null;
+        }
+        // Detach any reset-on-activity listeners so they never leak into the next screen.
+        if (screenActivityHandler) {
+            ['input', 'change', 'click', 'keydown'].forEach(ev =>
+                document.removeEventListener(ev, screenActivityHandler, true));
+            screenActivityHandler = null;
         }
         currentScreenName = null;
     }
@@ -339,17 +354,17 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    function startScreenTimer(timeoutMs, screenName, onTimeout) {
+    function startScreenTimer(timeoutMs, screenName, onTimeout, resetOnActivity = false) {
         clearScreenTimer();
         currentScreenName = screenName;
 
         logToRailway({
             type: 'SCREEN_TIMER_STARTED',
             message: `Started ${timeoutMs/1000}s timer for ${screenName}`,
-            context: { screen: screenName, timeout_ms: timeoutMs }
+            context: { screen: screenName, timeout_ms: timeoutMs, reset_on_activity: resetOnActivity }
         });
 
-        currentScreenTimer = setTimeout(async () => {
+        const fire = async () => {
             logToRailway({
                 type: 'SCREEN_TIMEOUT',
                 message: `Screen timeout on ${screenName} after ${timeoutMs/1000}s`,
@@ -361,7 +376,26 @@ document.addEventListener('DOMContentLoaded', () => {
             await recordTimeoutToDatabase(screenName);
 
             onTimeout();
-        }, timeoutMs);
+        };
+        currentScreenTimer = setTimeout(fire, timeoutMs);
+
+        // On post-study data-entry screens (feedback, demographics) this is an INACTIVITY timer, not a
+        // fixed deadline: any interaction re-arms it, so an actively-engaged-but-slow participant is
+        // never timed out. Only genuine idleness (no events for the full window) fires it. Debounced so
+        // a burst of keystrokes doesn't thrash the timer.
+        if (resetOnActivity) {
+            screenActivityHandler = () => {
+                const now = Date.now();
+                if (now - lastScreenTimerBumpAt < 1000) return;
+                lastScreenTimerBumpAt = now;
+                if (currentScreenTimer) {
+                    clearTimeout(currentScreenTimer);
+                    currentScreenTimer = setTimeout(fire, timeoutMs);
+                }
+            };
+            ['input', 'change', 'click', 'keydown'].forEach(ev =>
+                document.addEventListener(ev, screenActivityHandler, true));
+        }
     }
 
     function recordCompletionCode(code) {
@@ -1026,17 +1060,19 @@ document.addEventListener('DOMContentLoaded', () => {
                         }
                     } else if (isHumanPartner && waitingForPartner) {
                         // Human mode: waiting for partner response when timer expired.
-                        // FIX (04Aug26, T2.3): stop the concurrent 2s poll BEFORE firing this
-                        // one-shot fetch, and guard on turn below. Otherwise the poll and this
-                        // fetch could both deliver the same final message — resetting
-                        // binary_choice_time_ms (the DDM's primary observation) and drawing a
-                        // duplicate bubble on the decisive final turn.
-                        if (partnerPollInterval) { clearInterval(partnerPollInterval); partnerPollInterval = null; }
+                        // FIX (04Aug26, T2.3): guard the one-shot fetch on turn so it cannot
+                        // re-deliver a message the running 2s poll already delivered (which reset
+                        // binary_choice_time_ms — the DDM's primary observation — and drew a
+                        // duplicate bubble on the final turn). Together with the backend delivery
+                        // idempotency this fully prevents the double-delivery. NOTE: we do NOT stop
+                        // the poll before this fetch — if the partner's message is still in transit
+                        // the poll must stay alive to deliver it; we clear it only when WE deliver.
                         fetch(`/check_partner_message?session_id=${sessionId}`)
                             .then(r => r.json())
                             .then(result => {
                                 if (result.new_message && result.turn > currentTurn) {
-                                    // Message ready now — display it, show assessment
+                                    // Message ready now — stop the poll, display it, show assessment
+                                    if (partnerPollInterval) { clearInterval(partnerPollInterval); partnerPollInterval = null; }
                                     stopBackgroundDropoutCheck();
                                     stopIntermittentBubbles();
                                     chatInputContainer.style.display = 'none';
@@ -1205,7 +1241,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const conversationHeader = document.getElementById('conversation-header');
             if (currentRole === 'witness' && isHumanPartner && assignedSocialStyle && assignedSocialStyleDescription) {
                 // Show style instructions for witness
-                conversationHeader.innerHTML = `<strong>Style: ${assignedSocialStyle}</strong><br><span style="font-size: 0.9em; font-weight: normal;">${assignedSocialStyleDescription}</span>`;
+                conversationHeader.innerHTML = `<strong>Style: ${styleLabel(assignedSocialStyle)}</strong><br><span style="font-size: 0.9em; font-weight: normal;">${assignedSocialStyleDescription}</span>`;
             } else if (currentRole === 'interrogator') {
                 // Interrogator: show task reminder with randomized order
                 const humanFirst = Math.random() < 0.5;
@@ -1311,8 +1347,10 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         else if (phase === 'demographics') {
             initialSetupDiv.style.display = 'block';
-            // 3 minute timeout for demographics — post-study timeout code (they completed the conversation)
-            startScreenTimer(POST_STUDY_TIMEOUT_MS, 'demographics', () => endStudyWithScenario('demographics_timeout'));
+            // 3 minutes of INACTIVITY for demographics (resets on any interaction) — post-study timeout
+            // code (they completed the conversation). An actively-filling-but-slow participant is never
+            // cut off; only someone idle for 3 straight minutes times out.
+            startScreenTimer(POST_STUDY_TIMEOUT_MS, 'demographics', () => endStudyWithScenario('demographics_timeout'), true);
         }
         else if (phase === 'role-assignment') {
             roleAssignmentPhaseDiv.style.display = 'block';
@@ -1331,8 +1369,9 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         else if (phase === 'feedback') {
             feedbackPhaseDiv.style.display = 'block';
-            // 3 minute timeout for feedback — auto-submit and advance to demographics
-            startScreenTimer(POST_STUDY_TIMEOUT_MS, 'feedback', autoSubmitFeedback);
+            // 3 minutes of INACTIVITY for feedback (resets on any interaction) — auto-submit and advance
+            // to demographics only after the participant has genuinely stopped for the full window.
+            startScreenTimer(POST_STUDY_TIMEOUT_MS, 'feedback', autoSubmitFeedback, true);
         }
         else if (phase === 'final') {
             finalPageDiv.style.display = 'block';
@@ -1542,13 +1581,13 @@ document.addEventListener('DOMContentLoaded', () => {
         // Populate style name for witness
         if (isWitness && assignedSocialStyle) {
             if (preDemoStyleNameSpan) {
-                preDemoStyleNameSpan.textContent = assignedSocialStyle;
+                preDemoStyleNameSpan.textContent = styleLabel(assignedSocialStyle);
             }
             if (preDemoStyleDescriptionSpan && assignedSocialStyleDescription) {
                 preDemoStyleDescriptionSpan.textContent = assignedSocialStyleDescription;
             }
             preDemoStyleNameRepeatSpans.forEach(span => {
-                span.textContent = assignedSocialStyle;
+                span.textContent = styleLabel(assignedSocialStyle);
             });
         }
 
@@ -1703,7 +1742,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
             const realTraits = extractTraits(assignedSocialStyleDescription);
             const realOption = {
-                text: `${assignedSocialStyle} - ${realTraits}`,
+                text: `${styleLabel(assignedSocialStyle)} - ${realTraits}`,
                 correct: true
             };
 
@@ -3331,8 +3370,8 @@ Thank you again for your participation!
                 currentRole = assignedRole;
 
                 if (currentRole === 'witness' && assignedSocialStyle) {
-                    witnessStyleNameSpan.textContent = assignedSocialStyle;
-                    if (witnessStyleName2Span) witnessStyleName2Span.textContent = assignedSocialStyle;
+                    witnessStyleNameSpan.textContent = styleLabel(assignedSocialStyle);
+                    if (witnessStyleName2Span) witnessStyleName2Span.textContent = styleLabel(assignedSocialStyle);
                     witnessStyleDescriptionP.textContent = assignedSocialStyleDescription || '';
                 }
 
