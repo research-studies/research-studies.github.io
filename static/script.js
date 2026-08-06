@@ -1051,12 +1051,16 @@ document.addEventListener('DOMContentLoaded', () => {
                     stopIntermittentBubbles(); // Stop any lingering typing bubbles
 
                     if (assessmentAreaDiv.style.display === 'block') {
-                        // Already in assessment phase - just show message
+                        // Already in assessment phase - show message AND arm the 2-min backstop.
+                        // 06Aug26: this was the one route into a final assessment with no exit timer —
+                        // a participant mid-rating at expiry could sit forever (proven in testing).
+                        // The backstop saves any clicked choice, then exits via post_study_issue.
                         if (binaryChoice === null) {
                             showError('Time expired! Please complete your Human/AI choice and confidence assessment to continue.');
                         } else {
                             showError('Time expired! Please complete your confidence assessment to continue.');
                         }
+                        armInterrogatorFinalAssessmentBackstop();
                     } else if (isHumanPartner && waitingForPartner) {
                         // Human mode: waiting for partner response when timer expired.
                         // FIX (04Aug26, T2.3): guard the one-shot fetch on turn so it cannot
