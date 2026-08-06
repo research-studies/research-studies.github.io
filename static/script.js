@@ -127,7 +127,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const PROLIFIC_PARTNER_DROPPED_URL = "https://app.prolific.com/submissions/complete?cc=C19WFTZR";  // Partner dropped mid-conversation
     const PROLIFIC_ABANDONED_URL = "https://app.prolific.com/submissions/complete?cc=CZSGWT2I";        // Page refresh/abandon
     const PROLIFIC_POST_STUDY_TIMEOUT_AI_URL = "https://app.prolific.com/submissions/complete?cc=CNEGS1RX";  // Completed conversation but AFK on feedback/demographics (AI witness)
-    const PROLIFIC_POST_STUDY_TIMEOUT_HUMAN_URL = "https://app.prolific.com/submissions/complete?cc=C12UYMCR"; // Completed conversation but AFK on feedback/demographics (human witness)
+    const PROLIFIC_POST_STUDY_TIMEOUT_HUMAN_URL = "https://app.prolific.com/submissions/complete?cc=CNEGS1RX"; // 06Aug26: both studies define CNEGS1RX for Post Convo Abandon (C12UYMCR no longer exists in Prolific)
 
 
     // 2. Production Mode Check
@@ -435,7 +435,7 @@ document.addEventListener('DOMContentLoaded', () => {
         prepareIntentionalRedirect();
         // Use condition-specific codes so researcher can distinguish in Prolific
         const isAiCondition = urlVersion === '2';
-        const code = isAiCondition ? 'CNEGS1RX' : 'C12UYMCR';
+        const code = 'CNEGS1RX'; // 06Aug26: same Post Convo Abandon code in both studies
         const url = isAiCondition ? PROLIFIC_POST_STUDY_TIMEOUT_AI_URL : PROLIFIC_POST_STUDY_TIMEOUT_HUMAN_URL;
         recordCompletionCode(code);
         if (isProduction) {
@@ -447,35 +447,34 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // === Exit-scenario taxonomy (decisions #3/#4): one clear message per situation ===
     // Each non-normal exit has its own title/body (participant-fault vs system-fault wording)
-    // and a Prolific completion code. To distinguish scenarios in Prolific, create dedicated
-    // completion codes and swap the `code` values below; several currently reuse the configured
-    // "timed out" code (C1B54A7Q) so payments keep working until new codes are created.
+    // and a Prolific completion code. 06Aug26: dedicated per-condition codes wired in, matching
+    // the completion paths configured in BOTH Prolific studies (AI study / human study). Codes
+    // shared across studies (consent, partner-dropped, abandon, post-convo) are defined in each
+    // study, so the study membership itself distinguishes condition for those.
     const PROLIFIC_COMPLETE_BASE = "https://app.prolific.com/submissions/complete?cc=";
-    const postStudyCode = () => (urlVersion === '2' ? 'CNEGS1RX' : 'C12UYMCR'); // condition-specific (completed the task)
-    // Prolific completion codes grouped by how the submission should be handled (see EXIT_SCENARIOS `fault`):
-    //   SYSTEM_FAULT_CODE       — no-fault non-completion (no match / connection / technical) -> approve & pay.
-    //   PARTICIPANT_INACTIVE_CODE — participant went inactive/abandoned -> your discretion (review before approving).
-    // TODO(prolific): create a NEW completion code in the study for the inactive group and paste it below.
-    //   It intentionally defaults to SYSTEM_FAULT_CODE so no participant ever receives an invalid code if not yet set.
-    const SYSTEM_FAULT_CODE = 'C1B54A7Q';
-    const PARTICIPANT_INACTIVE_CODE = 'C1B54A7Q'; // <-- replace with the new Prolific code (e.g. 'CXXXXXXXX')
+    const postStudyCode = () => 'CNEGS1RX';   // "Post Convo Abandon" — same code configured in both studies
+    // Per-condition codes (urlVersion '2' = AI-witness study, else human-witness study):
+    const INACTIVE_PRE_CODE   = () => (urlVersion === '2' ? 'CIE3I5IJ' : 'C1L045US'); // Inactive before the conversation
+    const INACTIVE_CONVO_CODE = () => (urlVersion === '2' ? 'CWXDIPMY' : 'C1D7Q7UT'); // Inactive during the conversation
+    const NO_PARTNER_CODE     = () => (urlVersion === '2' ? 'CHEMAOWK' : 'CHPC15GQ'); // No partner found
+    const TECHNICAL_CODE      = () => (urlVersion === '2' ? 'C129C2C0' : 'C2QXBIAS'); // Technical failure
+    const RELOADED_CODE       = () => (urlVersion === '2' ? 'C1JVG0CJ' : 'C1IFGFHA'); // Reloaded after starting
     const EXIT_SCENARIOS = {
         // --- Pre-conversation, participant inactive (their action needed) ---
-        consent_timeout:         { title: "Session timed out",  fault: "participant", code: PARTICIPANT_INACTIVE_CODE, body: "You didn't continue past the consent screen in time, so the session has ended." },
-        instructions_timeout:    { title: "Session timed out",  fault: "participant", code: PARTICIPANT_INACTIVE_CODE, body: "You were inactive on the instructions for too long, so the session has ended." },
-        pre_chat_timeout:        { title: "Session timed out",  fault: "participant", code: PARTICIPANT_INACTIVE_CODE, body: "You were inactive before the conversation began, so the session has ended." },
-        conversation_inactivity: { title: "Conversation ended", fault: "participant", code: PARTICIPANT_INACTIVE_CODE, body: "You were inactive during the conversation for too long, so it ended early." },
+        consent_timeout:         { title: "Session timed out",  fault: "participant", codeFn: INACTIVE_PRE_CODE, body: "You didn't continue past the consent screen in time, so the session has ended." },
+        instructions_timeout:    { title: "Session timed out",  fault: "participant", codeFn: INACTIVE_PRE_CODE, body: "You were inactive on the instructions for too long, so the session has ended." },
+        pre_chat_timeout:        { title: "Session timed out",  fault: "participant", codeFn: INACTIVE_PRE_CODE, body: "You were inactive before the conversation began, so the session has ended." },
+        conversation_inactivity: { title: "Conversation ended", fault: "participant", codeFn: INACTIVE_CONVO_CODE, body: "You were inactive during the conversation for too long, so it ended early." },
         // --- System / bad luck (explicitly reassure: not their fault, still paid) ---
-        no_match:                { title: "No partner available",          fault: "system", code: SYSTEM_FAULT_CODE, body: "We couldn't match you with a partner in time. This is not your fault — you will still be paid for your time." },
-        backend_cleanup:         { title: "Connection lost while waiting", fault: "system", code: SYSTEM_FAULT_CODE, body: "We lost your connection while you were waiting to be matched. This is not your fault — you will still be paid for your time." },
-        technical_issue:         { title: "Technical issue",               fault: "system", code: SYSTEM_FAULT_CODE, body: "A technical problem interrupted the study before it could finish. This is not your fault — you will still be paid for your time." },
+        no_match:                { title: "No partner available",          fault: "system", codeFn: NO_PARTNER_CODE, body: "We couldn't match you with a partner in time. This is not your fault — you will still be paid for your time." },
+        backend_cleanup:         { title: "Connection lost while waiting", fault: "system", codeFn: TECHNICAL_CODE, body: "We lost your connection while you were waiting to be matched. This is not your fault — you will still be paid for your time." },
+        technical_issue:         { title: "Technical issue",               fault: "system", codeFn: TECHNICAL_CODE, body: "A technical problem interrupted the study before it could finish. This is not your fault — you will still be paid for your time." },
         // --- Post-conversation (finished the task; reassure they're paid) ---
         demographics_timeout:    { title: "Survey timed out", fault: "post", codeFn: postStudyCode, body: "You completed the conversation, but the final survey timed out. You have completed the task and will be paid." },
         post_study_issue:        { title: "Thanks for completing the conversation", fault: "post", codeFn: postStudyCode, body: "There was an issue capturing your final response, but you have completed the task and will be paid. You'll be redirected shortly." },
         // Reload guard (04Aug26): participant reloaded AFTER entering the conversation. Can't restart
-        // (would strand their partner and reset their data). Their earlier data is preserved. Code
-        // CZSGWT2I is the abandon/review bucket — switch to an auto-pay code if you prefer.
-        already_in_study:        { title: "You've already started this study", fault: "post", code: 'CZSGWT2I', body: "This study can't be restarted once it has begun. Your earlier responses were saved, and you'll be paid for your participation. Redirecting you to Prolific." },
+        // (would strand their partner and reset their data). Their earlier data is preserved.
+        already_in_study:        { title: "You've already started this study", fault: "post", codeFn: RELOADED_CODE, body: "This study can't be restarted once it has begun. Your earlier responses were saved, and you'll be paid for your participation. Redirecting you to Prolific." },
     };
 
     // Show the scenario's message, record it, then redirect (with a safety auto-continue).
