@@ -2767,7 +2767,7 @@ This research examines how people evaluate text-based conversations and how thes
 
 What You Will Be Asked to Do
 If you agree to participate, you will:
-- Engage in a text-based conversation with another person or with a Large Language Model (such as Chat-GPT)
+- Engage in a text-based conversation with another person or with a Large Language Model (such as ChatGPT)
 - Determine if you're talking to a human or an AI each turn
 - Rate your confidence in that guess on a sliding scale (0% = completely guessing, 100% = completely certain)
 - Provide a comment about your experience at the end of the conversation
