@@ -279,6 +279,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // TIMEOUT CONSTANTS (no screen should have user waiting >2-3 min without action)
     const CONSENT_TIMEOUT_MS = 3 * 60 * 1000;      // 3 minutes for consent
     const SCREEN_TIMEOUT_MS = 2 * 60 * 1000;       // 2 minutes for other screens
+    const PRECHAT_READING_TIMEOUT_MS = 4 * 60 * 1000; // 07Aug26: instructions/role pages — 4-min INACTIVITY window; 2 min was ejecting careful readers (13% of entrants)
     const WAITING_ROOM_TIMEOUT_MS = 2 * 60 * 1000; // 2 minutes for waiting room
     const CONVERSATION_INACTIVITY_MS = 2 * 60 * 1000; // 2 minutes inactivity for any participant during conversation
     const POST_STUDY_TIMEOUT_MS = 3 * 60 * 1000;         // 3 minutes for post-study screens (feedback, demographics)
@@ -1346,7 +1347,7 @@ document.addEventListener('DOMContentLoaded', () => {
         else if (phase === 'instructions') {
             instructionsPhaseDiv.style.display = 'block';
             // 2 minute timeout for pre-demo instructions
-            startScreenTimer(SCREEN_TIMEOUT_MS, 'instructions', () => endStudyWithScenario('instructions_timeout'), true); // 07Aug26: INACTIVITY timer (launch-day fix: fixed timer killed real readers at ~125s)
+            startScreenTimer(PRECHAT_READING_TIMEOUT_MS, 'instructions', () => endStudyWithScenario('instructions_timeout'), true); // 07Aug26: INACTIVITY timer (launch-day fix: fixed timer killed real readers at ~125s)
         }
         else if (phase === 'demographics') {
             initialSetupDiv.style.display = 'block';
@@ -1358,7 +1359,7 @@ document.addEventListener('DOMContentLoaded', () => {
         else if (phase === 'role-assignment') {
             roleAssignmentPhaseDiv.style.display = 'block';
             // 2 minute timeout for post-demo instructions
-            startScreenTimer(SCREEN_TIMEOUT_MS, 'role-assignment', () => endStudyWithScenario('pre_chat_timeout'), true); // 07Aug26: INACTIVITY timer (launch-day fix: this screen was executing human interrogators mid-read)
+            startScreenTimer(PRECHAT_READING_TIMEOUT_MS, 'role-assignment', () => endStudyWithScenario('pre_chat_timeout'), true); // 07Aug26: INACTIVITY timer (launch-day fix: this screen was executing human interrogators mid-read)
         }
         else if (phase === 'waiting-room') {
             waitingRoomPhaseDiv.style.display = 'block';
