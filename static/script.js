@@ -1345,6 +1345,7 @@ document.addEventListener('DOMContentLoaded', () => {
         // firing on dead pairs during feedback/demographics, re-triggering error UI + scrollIntoView
         // every cycle — participants reported the page "blinking" and refusing to scroll or submit.
         if (phase === 'feedback' || phase === 'demographics' || phase === 'final') {
+            finalResponseInProgress = false; // final answered — normal post-study handling resumes
             if (typeof partnerPollInterval !== 'undefined' && partnerPollInterval) { clearInterval(partnerPollInterval); partnerPollInterval = null; }
             if (typeof stopBackgroundDropoutCheck === 'function') stopBackgroundDropoutCheck();
             if (typeof stopIntermittentBubbles === 'function') stopIntermittentBubbles();
@@ -1701,6 +1702,12 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // --- ATTENTION CHECK LOGIC ---
+    // 07Aug26: while a final-response screen (witness belief / interrogator final assessment) is
+    // displayed and unanswered, partner-driven events must NOT touch the UI — the partner finishing
+    // and leaving was blanking the survivor's final (~6% of full conversations lost their final).
+    // The screen's own 2-min backstop still bounds this state.
+    let finalResponseInProgress = false;
+
     let attentionCheckAttempts = 0;
     let attentionCheckCorrectIndex = -1;
 
@@ -2315,6 +2322,10 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function handleStudyCompleted() {
+        if (finalResponseInProgress) {
+            logUiEvent('partner_completed_suppressed_during_final');
+            return; // survivor is answering their final — do not touch the UI
+        }
         logUiEvent('partner_completed_study');
 
         // Clean up timer
@@ -2356,6 +2367,10 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     async function handlePartnerDropout(reason = 'timeout') {
+        if (finalResponseInProgress) {
+            logUiEvent('partner_dropout_suppressed_during_final', { reason });
+            return; // survivor is answering their final — do not touch the UI
+        }
         // reason: 'left' = partner closed browser, 'timeout' = 2-min inactivity
         logUiEvent('partner_dropped', { reason });
 
@@ -3039,6 +3054,7 @@ Thank you again for your participation!
 
     // Route witness directly to binary choice (no modal)
     function showWitnessBinaryChoice(reason) {
+        finalResponseInProgress = true;
         // #1 guard: this can be called twice — once by the witness's own 7.5-min timer
         // ('time_expired') and again by the partner-drop detector ('partner_dropped_*'). The second
         // call would reset binaryChoiceInProgress/finalResponseReason and re-render the buttons
@@ -3133,6 +3149,7 @@ Thank you again for your participation!
     }
 
     function showInterrogatorFinalAssessment(reason, titleText = "Please make your final assessment:") {
+        finalResponseInProgress = true;
         finalResponseReason = reason;
 
         if (partnerPollInterval) {
@@ -3185,6 +3202,7 @@ Thank you again for your participation!
     // C5: arm the 2-min backstop on the interrogator final assessment. Saves any choice already
     // made, then routes to the post-study issue redirect. A successful submit (showMainPhase) clears it.
     function armInterrogatorFinalAssessmentBackstop() {
+        finalResponseInProgress = true; // 07Aug26: covers ALL final-assessment entry paths, incl. manual expiry branches
         startScreenTimer(SCREEN_TIMEOUT_MS, 'interrogator_final_assessment', () => {
             if (binaryChoice) {
                 submitInterrogatorFinalChoiceWithRetry(binaryChoice, 'final_assessment_timeout');
