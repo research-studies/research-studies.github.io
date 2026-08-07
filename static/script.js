@@ -1341,12 +1341,12 @@ document.addEventListener('DOMContentLoaded', () => {
         if (phase === 'consent') {
             consentPhaseDiv.style.display = 'block';
             // 3 minute timeout for consent
-            startScreenTimer(CONSENT_TIMEOUT_MS, 'consent', () => endStudyWithScenario('consent_timeout'));
+            startScreenTimer(CONSENT_TIMEOUT_MS, 'consent', () => endStudyWithScenario('consent_timeout'), true); // 07Aug26: INACTIVITY timer — readers must never be kicked mid-read
         }
         else if (phase === 'instructions') {
             instructionsPhaseDiv.style.display = 'block';
             // 2 minute timeout for pre-demo instructions
-            startScreenTimer(SCREEN_TIMEOUT_MS, 'instructions', () => endStudyWithScenario('instructions_timeout'));
+            startScreenTimer(SCREEN_TIMEOUT_MS, 'instructions', () => endStudyWithScenario('instructions_timeout'), true); // 07Aug26: INACTIVITY timer (launch-day fix: fixed timer killed real readers at ~125s)
         }
         else if (phase === 'demographics') {
             initialSetupDiv.style.display = 'block';
@@ -1358,7 +1358,7 @@ document.addEventListener('DOMContentLoaded', () => {
         else if (phase === 'role-assignment') {
             roleAssignmentPhaseDiv.style.display = 'block';
             // 2 minute timeout for post-demo instructions
-            startScreenTimer(SCREEN_TIMEOUT_MS, 'role-assignment', () => endStudyWithScenario('pre_chat_timeout'));
+            startScreenTimer(SCREEN_TIMEOUT_MS, 'role-assignment', () => endStudyWithScenario('pre_chat_timeout'), true); // 07Aug26: INACTIVITY timer (launch-day fix: this screen was executing human interrogators mid-read)
         }
         else if (phase === 'waiting-room') {
             waitingRoomPhaseDiv.style.display = 'block';
