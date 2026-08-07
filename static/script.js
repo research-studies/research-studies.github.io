@@ -563,7 +563,9 @@ document.addEventListener('DOMContentLoaded', () => {
         errorMessageArea.textContent = message;
         errorMessageArea.style.display = 'block';
         // Scroll to error so it's visible even on maximized windows
-        errorMessageArea.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        if (chatInterfaceDiv && chatInterfaceDiv.style.display !== 'none') {
+            errorMessageArea.scrollIntoView({ behavior: 'smooth', block: 'center' }); // 07Aug26: only within chat — was hijacking post-study scroll
+        }
         setTimeout(() => {
             errorMessageArea.style.display = 'none';
         }, 5000);
@@ -1338,6 +1340,15 @@ document.addEventListener('DOMContentLoaded', () => {
         clearScreenTimer();
         // Clear AI interrogator inactivity timer when leaving conversation
         clearConversationInactivityTimer();
+
+        // 07Aug26: POST-CHAT phases must kill ALL chat-era machinery. Leaked partner polls kept
+        // firing on dead pairs during feedback/demographics, re-triggering error UI + scrollIntoView
+        // every cycle — participants reported the page "blinking" and refusing to scroll or submit.
+        if (phase === 'feedback' || phase === 'demographics' || phase === 'final') {
+            if (typeof partnerPollInterval !== 'undefined' && partnerPollInterval) { clearInterval(partnerPollInterval); partnerPollInterval = null; }
+            if (typeof stopBackgroundDropoutCheck === 'function') stopBackgroundDropoutCheck();
+            if (typeof stopIntermittentBubbles === 'function') stopIntermittentBubbles();
+        }
 
         if (phase === 'consent') {
             consentPhaseDiv.style.display = 'block';
