@@ -1,6 +1,4 @@
 // FILE: static/script.js
-// This is the corrected version with error handling improvements.
-// All console statements removed to prevent participant contamination.
 document.addEventListener('DOMContentLoaded', () => {
     const initialSetupDiv = document.getElementById('initial-setup');
     const chatInterfaceDiv = document.getElementById('chat-interface'); // Main div for chat + assessment
