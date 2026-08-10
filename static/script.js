@@ -3463,6 +3463,29 @@ Thank you again for your participation!
     // --- Event Listeners ---
     // handleEarlyExit already declared above, no need to redeclare
 
+    // 09Aug26: native validation on this form tries to focus REQUIRED-but-hidden likert inputs,
+    // which Chrome cannot focus — producing erratic scrolling and a submit that never fires
+    // (participant reports: "page keeps scrolling down / cannot submit"). Bypass native validation;
+    // the handler below validates everything and points at the actual missed question.
+    initialForm.setAttribute('novalidate', 'novalidate');
+    function showDemoFormError(msg, anchorEl) {
+        let box = document.getElementById('demo-form-error');
+        if (!box) {
+            box = document.createElement('div');
+            box.id = 'demo-form-error';
+            box.style.cssText = 'background:#fdecea;color:#b71c1c;border:1px solid #f5c6cb;border-radius:6px;padding:10px 14px;margin:10px 0;font-weight:bold;';
+            initialForm.insertBefore(box, initialForm.firstChild);
+        }
+        box.textContent = msg;
+        const target = anchorEl || box;
+        target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        if (anchorEl) {
+            anchorEl.style.outline = '3px solid #e53935';
+            anchorEl.style.outlineOffset = '4px';
+            setTimeout(() => { anchorEl.style.outline = ''; anchorEl.style.outlineOffset = ''; }, 4000);
+        }
+    }
+
     initialForm.addEventListener('submit', async (e) => {
         e.preventDefault();
         logUiEvent('demographics_form_submitted');
@@ -3470,14 +3493,29 @@ Thank you again for your participation!
         // Pre-validate and build data before submitting
         const formData = new FormData(initialForm);
 
-        // Validate required Likert bubbles
+        // Validate required Likert bubbles — point at the exact missed group
         const requiredLikerts = ['self_detection_speed', 'others_detection_speed', 'ai_capabilities_rating', 'trust_in_ai'];
         for (const field of requiredLikerts) {
             if (!formData.get(field)) {
-                showError("Please select a value for all rating questions.");
+                const bubble = initialForm.querySelector(`.likert-bubble[data-name="${field}"]`);
+                showDemoFormError('Please answer the highlighted rating question.', bubble ? bubble.parentElement : null);
                 return;
             }
         }
+
+        // Validate everything else (selects, radios, text) without native focus-hidden bugs
+        if (!initialForm.checkValidity()) {
+            const inv = initialForm.querySelector(':invalid');
+            let anchor = inv;
+            if (inv && inv.offsetParent === null) {
+                const bubble = initialForm.querySelector(`.likert-bubble[data-name="${inv.name}"]`);
+                anchor = bubble ? bubble.parentElement : null;
+            }
+            showDemoFormError('Please answer the highlighted question.', anchor);
+            return;
+        }
+        const staleBox = document.getElementById('demo-form-error');
+        if (staleBox) staleBox.remove();
 
         // Validate AI usage frequency and models
         const ai_usage_frequency_val = formData.get('ai_usage_frequency');
