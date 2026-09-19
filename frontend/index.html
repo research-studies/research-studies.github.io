@@ -1,0 +1,724 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Writing Study</title>
+        <link rel="stylesheet" href="static/style.css">
+        <link rel="icon" href="data:;base64,iVBORw0KGgo=">
+        <!-- jsPDF was already a dependency of the previous site; used only for the optional consent/debrief download. -->
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+     </head>
+<body>
+    <!-- Timer Display - Top Right (writing time cap) -->
+    <div id="timer-display" style="display: none;">
+        Time left: <span id="countdown-timer">25:00</span>
+    </div>
+
+    <div class="container">
+
+        <!-- Phase 0: Session setup (POST /api/session/start) -->
+        <div id="loading-phase" class="study-phase" style="display: none;">
+            <h2>Writing Study</h2>
+            <div id="loading-row" class="loading-message">
+                <div class="loading-spinner"></div>
+                <span id="loading-text">Setting up your session. One moment.</span>
+            </div>
+            <div id="start-error" class="inline-error" style="display: none;"></div>
+            <div style="text-align: center;">
+                <button id="start-retry-button" style="display: none;">Try again</button>
+            </div>
+        </div>
+
+        <!-- Phase 1: Consent -->
+        <div id="consent-phase" class="study-phase" style="display: none;">
+            <div id="consent-content">
+                 <h2 style="text-align: center;">Consent to Participate in Research</h2>
+                 <p style="text-align: center;">Principal Investigator: Nykko Vitali (nvitali@fas.harvard.edu)<br>Faculty Sponsor: Jason Mitchell</p>
+
+                 <h4>About this Study</h4>
+                 <p>You are being asked to participate in a research study. This form gives you information about the study.</p>
+
+                 <h4>Purpose of Research</h4>
+                 <p>This research examines how people write with AI writing assistants and how they judge whether a piece of writing looks human-written.</p>
+
+                 <h4>What You Will Be Asked to Do</h4>
+                 <p>If you agree to participate, you will:</p>
+                 <ul>
+                     <li>Answer a few short questions about what makes writing look AI-generated to you</li>
+                     <li>Write a short personal statement (at least <span class="consent-min-words">250</span> words) with the help of an AI writing assistant that we assign to you. You can ask the assistant for text, edit the text yourself, or start over</li>
+                     <li>Each time you finish a change, rate how likely a person and an AI detector would be to judge the statement as human-written, and decide whether to keep editing or to submit</li>
+                     <li>Have your submitted statement scored by an AI-detection service</li>
+                     <li>Answer short questions about the task, then complete a brief demographic questionnaire</li>
+                     <li>The writing part has a time limit of <span class="consent-time-cap">25</span> minutes. The total time commitment is approximately 30 minutes</li>
+                     <li>Please do not include information that could identify you or another person in your writing</li>
+                 </ul>
+
+                 <h4>Your Rights as a Participant</h4>
+                 <ul>
+                     <li>Your participation is voluntary.</li>
+                     <li>You may stop at any time.</li>
+                     <li>You may choose not to answer any question.</li>
+                 </ul>
+
+                 <h4>Risks and Benefits</h4>
+                 <ul>
+                     <li>There are no known risks beyond those of everyday computer use</li>
+                     <li>While there are no direct benefits to you, your participation helps advance our understanding of how people work with AI writing tools</li>
+                 </ul>
+
+                 <h4>Compensation</h4>
+                 <ul>
+                    <li>You will receive the base payment listed on Prolific for your participation</li>
+                    <li>Some participants are offered a bonus that depends on how the AI-detection service rates their final statement. Whether you are offered a bonus, its amount, and the rule for earning it are shown to you in plain words before you start writing</li>
+                    <li>Any bonus is paid through Prolific after the study closes</li>
+                 </ul>
+
+                 <h4>Confidentiality</h4>
+                 <ul>
+                    <li>Your responses will be stored securely</li>
+                    <li>The text you write and your messages to the assistant are sent to the assistant's provider and to AI-detection services for scoring. Your Prolific ID is never sent to these services</li>
+                    <li>Data will be analyzed without any identifying information</li>
+                    <li>Only researchers will have access to the data</li>
+                    <li>Anonymized results derived from your data may be shared in scientific databases for transparency of our research process</li>
+                    <li>Any personally identifying information you may include in your writing will be removed from analyses and will not be used in research outputs</li>
+                 </ul>
+
+                 <h4>Questions or Concerns?</h4>
+                 <ul>
+                    <li>For questions about the research: Contact the Principal Investigator at nvitali@fas.harvard.edu</li>
+                    <li>For questions about your rights as a participant: Contact cuhs@harvard.edu</li>
+                 </ul>
+
+                 <h4>Agreement to Participate</h4>
+                 <p>By clicking "I agree" below, you indicate that:</p>
+                 <ul>
+                    <li>You are at least 18 years old.</li>
+                    <li>You have read and understood this consent form.</li>
+                    <li>You voluntarily agree to participate.</li>
+                    <li>You understand you can withdraw at any time.</li>
+                 </ul>
+            </div>
+
+            <div id="consent-error" class="inline-error" style="display: none;"></div>
+
+            <div id="consent-actions">
+                 <button id="agree-button">I agree to participate</button>
+                 <button id="disagree-button" style="background-color: #dc3545;">I do not agree</button>
+            </div>
+
+            <div id="consent-download-prompt" style="display: none; text-align: center; margin-top: 30px;">
+                 <p>Thank you for agreeing to participate. Would you like to download a copy of the consent form for your records?</p>
+                 <button id="download-consent-button">Download Consent Form</button>
+                 <button id="skip-consent-download-button">Continue Without Downloading</button>
+            </div>
+        </div>
+
+        <!-- Phase 2: Cue elicitation (POST /cues) -->
+        <div id="cues-phase" class="study-phase" style="display: none;">
+            <h2>Before You Start</h2>
+            <p>We would like to know what you look for when you decide whether a piece of writing was produced by an AI. There are no right or wrong answers.</p>
+
+            <form id="cues-form" class="study-form">
+                <label for="cues-free-text">What makes writing look AI-generated to you? Please describe it in your own words.</label>
+                <textarea id="cues-free-text" name="free_text" rows="5" placeholder="Your answer..."></textarea>
+
+                <p class="form-section-note">For each feature below, rate how strongly it signals to you that a text was written by an AI. 1 = not a signal at all, 7 = a very strong signal.</p>
+
+                <label>Overly formal tone</label>
+                <div class="likert-bubble-group likert-7">
+                    <button type="button" class="likert-bubble" data-name="overly_formal" data-value="1">1</button>
+                    <button type="button" class="likert-bubble" data-name="overly_formal" data-value="2">2</button>
+                    <button type="button" class="likert-bubble" data-name="overly_formal" data-value="3">3</button>
+                    <button type="button" class="likert-bubble" data-name="overly_formal" data-value="4">4</button>
+                    <button type="button" class="likert-bubble" data-name="overly_formal" data-value="5">5</button>
+                    <button type="button" class="likert-bubble" data-name="overly_formal" data-value="6">6</button>
+                    <button type="button" class="likert-bubble" data-name="overly_formal" data-value="7">7</button>
+                </div>
+                <input type="hidden" name="overly_formal" value="">
+
+                <label>Em dashes (the long dash, like this &mdash; between words)</label>
+                <div class="likert-bubble-group likert-7">
+                    <button type="button" class="likert-bubble" data-name="em_dashes" data-value="1">1</button>
+                    <button type="button" class="likert-bubble" data-name="em_dashes" data-value="2">2</button>
+                    <button type="button" class="likert-bubble" data-name="em_dashes" data-value="3">3</button>
+                    <button type="button" class="likert-bubble" data-name="em_dashes" data-value="4">4</button>
+                    <button type="button" class="likert-bubble" data-name="em_dashes" data-value="5">5</button>
+                    <button type="button" class="likert-bubble" data-name="em_dashes" data-value="6">6</button>
+                    <button type="button" class="likert-bubble" data-name="em_dashes" data-value="7">7</button>
+                </div>
+                <input type="hidden" name="em_dashes" value="">
+
+                <label>Repetitive sentence structure</label>
+                <div class="likert-bubble-group likert-7">
+                    <button type="button" class="likert-bubble" data-name="repetitive_structure" data-value="1">1</button>
+                    <button type="button" class="likert-bubble" data-name="repetitive_structure" data-value="2">2</button>
+                    <button type="button" class="likert-bubble" data-name="repetitive_structure" data-value="3">3</button>
+                    <button type="button" class="likert-bubble" data-name="repetitive_structure" data-value="4">4</button>
+                    <button type="button" class="likert-bubble" data-name="repetitive_structure" data-value="5">5</button>
+                    <button type="button" class="likert-bubble" data-name="repetitive_structure" data-value="6">6</button>
+                    <button type="button" class="likert-bubble" data-name="repetitive_structure" data-value="7">7</button>
+                </div>
+                <input type="hidden" name="repetitive_structure" value="">
+
+                <label>Excessive transitions ("Moreover", "Furthermore", "In conclusion")</label>
+                <div class="likert-bubble-group likert-7">
+                    <button type="button" class="likert-bubble" data-name="excessive_transitions" data-value="1">1</button>
+                    <button type="button" class="likert-bubble" data-name="excessive_transitions" data-value="2">2</button>
+                    <button type="button" class="likert-bubble" data-name="excessive_transitions" data-value="3">3</button>
+                    <button type="button" class="likert-bubble" data-name="excessive_transitions" data-value="4">4</button>
+                    <button type="button" class="likert-bubble" data-name="excessive_transitions" data-value="5">5</button>
+                    <button type="button" class="likert-bubble" data-name="excessive_transitions" data-value="6">6</button>
+                    <button type="button" class="likert-bubble" data-name="excessive_transitions" data-value="7">7</button>
+                </div>
+                <input type="hidden" name="excessive_transitions" value="">
+
+                <label>Generic examples</label>
+                <div class="likert-bubble-group likert-7">
+                    <button type="button" class="likert-bubble" data-name="generic_examples" data-value="1">1</button>
+                    <button type="button" class="likert-bubble" data-name="generic_examples" data-value="2">2</button>
+                    <button type="button" class="likert-bubble" data-name="generic_examples" data-value="3">3</button>
+                    <button type="button" class="likert-bubble" data-name="generic_examples" data-value="4">4</button>
+                    <button type="button" class="likert-bubble" data-name="generic_examples" data-value="5">5</button>
+                    <button type="button" class="likert-bubble" data-name="generic_examples" data-value="6">6</button>
+                    <button type="button" class="likert-bubble" data-name="generic_examples" data-value="7">7</button>
+                </div>
+                <input type="hidden" name="generic_examples" value="">
+
+                <label>No personal detail</label>
+                <div class="likert-bubble-group likert-7">
+                    <button type="button" class="likert-bubble" data-name="no_personal_detail" data-value="1">1</button>
+                    <button type="button" class="likert-bubble" data-name="no_personal_detail" data-value="2">2</button>
+                    <button type="button" class="likert-bubble" data-name="no_personal_detail" data-value="3">3</button>
+                    <button type="button" class="likert-bubble" data-name="no_personal_detail" data-value="4">4</button>
+                    <button type="button" class="likert-bubble" data-name="no_personal_detail" data-value="5">5</button>
+                    <button type="button" class="likert-bubble" data-name="no_personal_detail" data-value="6">6</button>
+                    <button type="button" class="likert-bubble" data-name="no_personal_detail" data-value="7">7</button>
+                </div>
+                <input type="hidden" name="no_personal_detail" value="">
+
+                <label>Too-polished grammar</label>
+                <div class="likert-bubble-group likert-7">
+                    <button type="button" class="likert-bubble" data-name="polished_grammar" data-value="1">1</button>
+                    <button type="button" class="likert-bubble" data-name="polished_grammar" data-value="2">2</button>
+                    <button type="button" class="likert-bubble" data-name="polished_grammar" data-value="3">3</button>
+                    <button type="button" class="likert-bubble" data-name="polished_grammar" data-value="4">4</button>
+                    <button type="button" class="likert-bubble" data-name="polished_grammar" data-value="5">5</button>
+                    <button type="button" class="likert-bubble" data-name="polished_grammar" data-value="6">6</button>
+                    <button type="button" class="likert-bubble" data-name="polished_grammar" data-value="7">7</button>
+                </div>
+                <input type="hidden" name="polished_grammar" value="">
+
+                <label>Certain vocabulary (words like "delve", "tapestry", "testament")</label>
+                <div class="likert-bubble-group likert-7">
+                    <button type="button" class="likert-bubble" data-name="certain_vocabulary" data-value="1">1</button>
+                    <button type="button" class="likert-bubble" data-name="certain_vocabulary" data-value="2">2</button>
+                    <button type="button" class="likert-bubble" data-name="certain_vocabulary" data-value="3">3</button>
+                    <button type="button" class="likert-bubble" data-name="certain_vocabulary" data-value="4">4</button>
+                    <button type="button" class="likert-bubble" data-name="certain_vocabulary" data-value="5">5</button>
+                    <button type="button" class="likert-bubble" data-name="certain_vocabulary" data-value="6">6</button>
+                    <button type="button" class="likert-bubble" data-name="certain_vocabulary" data-value="7">7</button>
+                </div>
+                <input type="hidden" name="certain_vocabulary" value="">
+
+                <label>Predictable paragraph structure</label>
+                <div class="likert-bubble-group likert-7">
+                    <button type="button" class="likert-bubble" data-name="predictable_paragraphs" data-value="1">1</button>
+                    <button type="button" class="likert-bubble" data-name="predictable_paragraphs" data-value="2">2</button>
+                    <button type="button" class="likert-bubble" data-name="predictable_paragraphs" data-value="3">3</button>
+                    <button type="button" class="likert-bubble" data-name="predictable_paragraphs" data-value="4">4</button>
+                    <button type="button" class="likert-bubble" data-name="predictable_paragraphs" data-value="5">5</button>
+                    <button type="button" class="likert-bubble" data-name="predictable_paragraphs" data-value="6">6</button>
+                    <button type="button" class="likert-bubble" data-name="predictable_paragraphs" data-value="7">7</button>
+                </div>
+                <input type="hidden" name="predictable_paragraphs" value="">
+
+                <label for="cues-other-text">Anything else you look for? (optional)</label>
+                <input type="text" id="cues-other-text" name="other_text" placeholder="Optional">
+
+                <button type="submit" id="cues-submit-button">Continue</button>
+            </form>
+            <div id="cues-loading" class="loading-message" style="display: none;">Saving your answers...</div>
+        </div>
+
+        <!-- Phase 3: Instructions (paginated) + comprehension check -->
+        <div id="instructions-phase" class="study-phase" style="display: none;">
+            <h2>Instructions</h2>
+
+            <div id="instructions-pagination-container">
+
+                <!-- Page 1: The task -->
+                <div class="instruction-page" id="instruction-page-1" style="display: block;">
+                    <div class="instruction-content">
+                        <h3>Your Writing Task</h3>
+                        <p id="instr-topic-text" class="key-instructions"></p>
+                        <p><strong>Purpose of the statement:</strong></p>
+                        <p id="instr-purpose-text" class="purpose-box"></p>
+                        <p>Everyone in this study writes the same kind of statement. Your goal is a statement that reads as written by a human.</p>
+                    </div>
+                </div>
+
+                <!-- Page 2: The workspace -->
+                <div class="instruction-page" id="instruction-page-2" style="display: none;">
+                    <div class="instruction-content">
+                        <h3>How the Workspace Works</h3>
+                        <p>You will see two panes.</p>
+                        <ul>
+                            <li><strong>Left:</strong> a chat with your assigned writing assistant. The assistant is an AI language model. We do not tell you which one. You can ask it to write a draft, revise a draft, or answer questions. Your current statement is attached to every message you send it.</li>
+                            <li><strong>Right:</strong> the statement editor. You can type in it yourself, or click <em>Use this as my statement</em> under any assistant reply to put that reply in the editor.</li>
+                        </ul>
+                        <p>The statement must be at least <strong><span id="instr-min-words">250</span> words</strong>. A live word count is shown under the editor.</p>
+                        <p>When you finish a change, click <strong>Done with this change</strong>. You will then rate the statement on two sliders and choose to <strong>keep editing</strong> or <strong>submit</strong>. You can make as many changes as you like within the time limit.</p>
+                        <p>You have <strong><span id="instr-time-cap">25</span> minutes</strong> for the writing part. A timer is shown at the top right. When time runs out, your most recent finished version is submitted automatically.</p>
+                        <p><strong>Do not refresh the page</strong> while you are writing.</p>
+                    </div>
+                </div>
+
+                <!-- Page 3: The bonus rule -->
+                <div class="instruction-page" id="instruction-page-3" style="display: none;">
+                    <div class="instruction-content">
+                        <h3>Your Bonus Rule</h3>
+                        <p id="instr-bonus-rule-text" class="key-instructions bonus-box"></p>
+                        <p>Your submitted statement is scored by an AI-detection service. The detector gives one verdict: more likely written by a human, or more likely written by an AI.</p>
+                        <p id="instr-feedback-note"></p>
+                        <p>Please read the rule above carefully. On the next page we ask two short questions about it.</p>
+                    </div>
+                </div>
+
+                <!-- Page 4: Comprehension check (adapted from the attention-check mechanics) -->
+                <div class="instruction-page" id="instruction-page-4" style="display: none;">
+                    <div class="instruction-content">
+                        <h3>Quick Check</h3>
+
+                        <p id="check-q1-text" class="check-question"></p>
+                        <div id="check-q1-options" class="check-options">
+                            <label class="check-option"><input type="radio" name="check-q1" value="0"><span id="check-q1-option-0"></span></label>
+                            <label class="check-option"><input type="radio" name="check-q1" value="1"><span id="check-q1-option-1"></span></label>
+                            <label class="check-option"><input type="radio" name="check-q1" value="2"><span id="check-q1-option-2"></span></label>
+                            <label class="check-option"><input type="radio" name="check-q1" value="3"><span id="check-q1-option-3"></span></label>
+                        </div>
+
+                        <p id="check-q2-text" class="check-question"></p>
+                        <div id="check-q2-options" class="check-options">
+                            <label class="check-option"><input type="radio" name="check-q2" value="0"><span id="check-q2-option-0"></span></label>
+                            <label class="check-option"><input type="radio" name="check-q2" value="1"><span id="check-q2-option-1"></span></label>
+                            <label class="check-option"><input type="radio" name="check-q2" value="2"><span id="check-q2-option-2"></span></label>
+                            <label class="check-option"><input type="radio" name="check-q2" value="3"><span id="check-q2-option-3"></span></label>
+                        </div>
+
+                        <p id="comprehension-check-error" class="inline-error" style="display: none;"></p>
+                    </div>
+                </div>
+
+                <!-- Navigation -->
+                <div id="instruction-nav">
+                    <button type="button" id="instruction-prev-btn" style="visibility: hidden;">&larr; Back</button>
+                    <span id="instruction-page-indicator">1 / 4</span>
+                    <button type="button" id="instruction-next-btn">Next &rarr;</button>
+                </div>
+            </div>
+
+            <button id="confirm-instructions-button" style="display: none; margin-top: 15px;">Open the workspace</button>
+        </div>
+
+        <!-- Phase 4: Workspace (chat + editor) -->
+        <div id="workspace-phase" class="study-phase" style="display: none;">
+            <div id="workspace-task-reminder">
+                <p><strong>Task:</strong> <span id="ws-topic-text"></span></p>
+                <p><strong>Purpose:</strong> <span id="ws-purpose-text"></span></p>
+                <p id="ws-bonus-reminder" class="muted"></p>
+            </div>
+
+            <div id="time-up-banner" class="inline-notice" style="display: none;">Time is up. Please finish rating your statement.</div>
+
+            <div class="workspace-grid">
+                <!-- Left: chat with the assigned writing assistant -->
+                <div class="pane chat-pane">
+                    <h3>Your writing assistant</h3>
+                    <div class="chat-window">
+                        <div id="message-list"></div>
+                        <div id="assistant-working" style="display: none;">
+                            <div class="dot"></div>
+                            <div class="dot"></div>
+                            <div class="dot"></div>
+                        </div>
+                    </div>
+                    <div id="chat-error" class="inline-error" style="display: none;"></div>
+                    <div id="chat-input-container" class="chat-input-area">
+                        <textarea id="prompt-input" rows="3" placeholder="Ask the assistant to write or revise your statement..."></textarea>
+                        <button id="send-prompt-button">Send</button>
+                    </div>
+                    <p class="muted small">Your current statement is attached to every message.</p>
+                </div>
+
+                <!-- Right: statement editor -->
+                <div class="pane essay-pane">
+                    <h3>Your statement</h3>
+                    <textarea id="essay-editor" placeholder="Your statement goes here. Type it yourself, or use an assistant reply."></textarea>
+                    <div class="essay-status-row">
+                        <span id="word-count" class="word-count short">0 / 250 words</span>
+                        <span id="word-count-status" class="muted small"></span>
+                    </div>
+                    <div id="essay-error" class="inline-error" style="display: none;"></div>
+                    <div id="essay-working" class="loading-message" style="display: none;">Saving this version...</div>
+                    <div class="essay-buttons">
+                        <button id="start-over-button" class="secondary-button">Start over</button>
+                        <button id="done-button" disabled>Done with this change</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Phase 5: Rating screen (after each version) -->
+        <div id="rating-phase" class="study-phase" style="display: none;">
+            <h2 id="rating-heading">Rate this version</h2>
+            <div id="timeout-notice" class="inline-notice" style="display: none;">
+                Time is up. Please rate this version. It will be submitted as your final statement.
+            </div>
+
+            <div id="detector-panel" class="detector-panel" style="display: none;">
+                <p class="detector-title">Detector verdict for this version</p>
+                <p id="detector-label" class="detector-label"></p>
+                <p id="detector-pass" class="detector-pass"></p>
+            </div>
+
+            <p id="rating-version-info" class="muted"></p>
+            <details class="essay-preview-details">
+                <summary>Show the text of this version</summary>
+                <pre id="rating-essay-preview" class="essay-preview"></pre>
+            </details>
+
+            <div id="assessment-area">
+                <div class="slider-block">
+                    <p class="slider-question"><strong>A person reading this would think a human wrote it.</strong></p>
+                    <label for="slider-human">How likely: <span id="slider-human-value" class="slider-value">&ndash;</span>%</label>
+                    <input type="range" id="slider-human" class="rating-slider pristine" min="0" max="100" step="1" value="50">
+                    <div class="slider-labels">
+                        <span class="label-left">0% (Very unlikely)</span>
+                        <span class="label-center">50%</span>
+                        <span class="label-right">100% (Very likely)</span>
+                    </div>
+                </div>
+
+                <div class="slider-block">
+                    <p class="slider-question"><strong>An AI detector would rate this as human-written.</strong></p>
+                    <label for="slider-detector">How likely: <span id="slider-detector-value" class="slider-value">&ndash;</span>%</label>
+                    <input type="range" id="slider-detector" class="rating-slider pristine" min="0" max="100" step="1" value="50">
+                    <div class="slider-labels">
+                        <span class="label-left">0% (Very unlikely)</span>
+                        <span class="label-center">50%</span>
+                        <span class="label-right">100% (Very likely)</span>
+                    </div>
+                </div>
+
+                <p id="rating-hint" class="muted small">Move both sliders to continue.</p>
+                <div id="rating-error" class="inline-error" style="display: none;"></div>
+                <div id="rating-loading" class="loading-message" style="display: none;">Saving...</div>
+
+                <div id="rating-buttons">
+                    <button id="keep-editing-button" class="secondary-button" disabled>Keep editing</button>
+                    <button id="submit-final-button" disabled>Submit as my final statement</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Phase 6: Result -->
+        <div id="result-phase" class="study-phase" style="display: none;">
+            <h2>Your Result</h2>
+            <div class="result-box">
+                <p id="result-verdict"></p>
+                <p id="result-passed"></p>
+                <p id="result-bonus"></p>
+                <p id="result-note" class="muted"></p>
+            </div>
+            <div style="text-align: center;">
+                <button id="result-continue-button">Continue</button>
+            </div>
+        </div>
+
+        <!-- Phase 7: Post-task questions (POST /post_survey) -->
+        <div id="post-survey-phase" class="study-phase" style="display: none;">
+            <h2>About the Task</h2>
+            <p>A few questions about what you just did.</p>
+
+            <form id="post-survey-form" class="study-form">
+                <label for="post-what-changed">What did you change in the statement, and why?</label>
+                <textarea id="post-what-changed" name="what_changed_text" rows="5" placeholder="Your answer..."></textarea>
+
+                <label for="post-most-helpful">Which edits do you think helped most to make it read as human-written?</label>
+                <textarea id="post-most-helpful" name="most_helpful_text" rows="4" placeholder="Your answer..."></textarea>
+
+                <label>How much did it matter to you that the statement passed the detector?</label>
+                <div class="likert-bubble-group likert-7">
+                    <button type="button" class="likert-bubble" data-name="manip_mattered" data-value="1">1</button>
+                    <button type="button" class="likert-bubble" data-name="manip_mattered" data-value="2">2</button>
+                    <button type="button" class="likert-bubble" data-name="manip_mattered" data-value="3">3</button>
+                    <button type="button" class="likert-bubble" data-name="manip_mattered" data-value="4">4</button>
+                    <button type="button" class="likert-bubble" data-name="manip_mattered" data-value="5">5</button>
+                    <button type="button" class="likert-bubble" data-name="manip_mattered" data-value="6">6</button>
+                    <button type="button" class="likert-bubble" data-name="manip_mattered" data-value="7">7</button>
+                </div>
+                <div class="slider-labels likert-endpoints">
+                    <span class="label-left">1 = Did not matter at all</span>
+                    <span class="label-right">7 = Mattered a great deal</span>
+                </div>
+                <input type="hidden" name="manip_mattered" value="">
+
+                <label for="post-recalled-bonus">What was your bonus amount for this task? (If there was no bonus, write "none".)</label>
+                <input type="text" id="post-recalled-bonus" name="manip_recalled_bonus" placeholder="For example: $1.00 or none">
+
+                <label for="post-recalled-purpose">What was the stated purpose of the statement?</label>
+                <input type="text" id="post-recalled-purpose" name="manip_recalled_purpose" placeholder="In your own words">
+
+                <button type="submit" id="post-survey-submit-button">Continue</button>
+            </form>
+            <div id="post-survey-loading" class="loading-message" style="display: none;">Saving your answers...</div>
+        </div>
+
+        <!-- Phase 8: Demographics (reused form; POST /demographics {answers}) -->
+        <div id="demographics-phase" class="study-phase" style="display: none;">
+            <h2>Demographics Questionnaire</h2>
+            <p>Before we conclude, please complete this brief questionnaire about your experiences with AI and some basic information about you.</p>
+
+            <form id="demographics-form" class="study-form">
+                <!-- AI Experience Section -->
+                <label>How often do you use AI chatbots (ChatGPT, Claude, Gemini, etc.)?</label>
+                <select name="ai_usage_frequency" required>
+                    <option value="" disabled selected>Select...</option>
+                    <option value="0">Never</option>
+                    <option value="1">A few times ever</option>
+                    <option value="2">Monthly</option>
+                    <option value="3">Weekly</option>
+                    <option value="4">Daily</option>
+                    <option value="5">Multiple times daily</option>
+                </select>
+
+                <label>Which AI models have you used? (check all that apply)</label>
+                <div class="checkbox-group">
+                    <label><input type="checkbox" name="ai_models_used" value="chatgpt"> ChatGPT</label>
+                    <label><input type="checkbox" name="ai_models_used" value="claude"> Claude</label>
+                    <label><input type="checkbox" name="ai_models_used" value="gemini"> Gemini</label>
+                    <label><input type="checkbox" name="ai_models_used" value="deepseek"> DeepSeek</label>
+                    <label><input type="checkbox" name="ai_models_used" value="perplexity"> Perplexity</label>
+                    <label><input type="checkbox" name="ai_models_used" value="grok"> Grok</label>
+                    <label><input type="checkbox" name="ai_models_used" value="qwen"> Qwen</label>
+                    <label><input type="checkbox" name="ai_models_used" value="kimi"> Kimi</label>
+                    <label><input type="checkbox" name="ai_models_used" value="glm"> GLM</label>
+                    <label><input type="checkbox" name="ai_models_used" value="llama"> Llama</label>
+                    <label><input type="checkbox" name="ai_models_used" value="characterai"> CharacterAI</label>
+                    <label><input type="checkbox" name="ai_models_used" value="other"> Other</label>
+                </div>
+
+                <label>How often do you use AI tools to help with your writing (emails, essays, applications, posts)?</label>
+                <div class="likert-bubble-group">
+                    <button type="button" class="likert-bubble" data-name="ai_writing_frequency" data-value="1">Never</button>
+                    <button type="button" class="likert-bubble" data-name="ai_writing_frequency" data-value="2">Rarely</button>
+                    <button type="button" class="likert-bubble" data-name="ai_writing_frequency" data-value="3">Sometimes</button>
+                    <button type="button" class="likert-bubble" data-name="ai_writing_frequency" data-value="4">Often</button>
+                    <button type="button" class="likert-bubble" data-name="ai_writing_frequency" data-value="5">Almost always</button>
+                </div>
+                <input type="hidden" name="ai_writing_frequency" value="">
+
+                <label>Before today, how familiar were you with AI-detection tools (tools that judge whether a text was written by an AI)?</label>
+                <div class="likert-bubble-group">
+                    <button type="button" class="likert-bubble" data-name="detector_familiarity" data-value="1">Never heard of them</button>
+                    <button type="button" class="likert-bubble" data-name="detector_familiarity" data-value="2">Heard of them</button>
+                    <button type="button" class="likert-bubble" data-name="detector_familiarity" data-value="3">Used one a few times</button>
+                    <button type="button" class="likert-bubble" data-name="detector_familiarity" data-value="4">Use them regularly</button>
+                </div>
+                <input type="hidden" name="detector_familiarity" value="">
+
+                <label>How often do you write texts of a page or more (essays, reports, long emails, posts)?</label>
+                <div class="likert-bubble-group">
+                    <button type="button" class="likert-bubble" data-name="writing_frequency" data-value="1">Rarely or never</button>
+                    <button type="button" class="likert-bubble" data-name="writing_frequency" data-value="2">A few times a year</button>
+                    <button type="button" class="likert-bubble" data-name="writing_frequency" data-value="3">Monthly</button>
+                    <button type="button" class="likert-bubble" data-name="writing_frequency" data-value="4">Weekly</button>
+                    <button type="button" class="likert-bubble" data-name="writing_frequency" data-value="5">Daily</button>
+                </div>
+                <input type="hidden" name="writing_frequency" value="">
+
+                <label>How would you rate the current capabilities of AI chatbots?</label>
+                <div class="likert-bubble-group">
+                    <button type="button" class="likert-bubble" data-name="ai_capabilities_rating" data-value="1">Not at all Capable</button>
+                    <button type="button" class="likert-bubble" data-name="ai_capabilities_rating" data-value="2">Slightly Capable</button>
+                    <button type="button" class="likert-bubble" data-name="ai_capabilities_rating" data-value="3">Somewhat Capable</button>
+                    <button type="button" class="likert-bubble" data-name="ai_capabilities_rating" data-value="4">Moderately Capable</button>
+                    <button type="button" class="likert-bubble" data-name="ai_capabilities_rating" data-value="5">Quite Capable</button>
+                    <button type="button" class="likert-bubble" data-name="ai_capabilities_rating" data-value="6">Very Capable</button>
+                    <button type="button" class="likert-bubble" data-name="ai_capabilities_rating" data-value="7">Extremely Capable</button>
+                </div>
+                <input type="hidden" name="ai_capabilities_rating" value="">
+
+                <label>How much do you generally trust AI systems?</label>
+                <div class="likert-bubble-group">
+                    <button type="button" class="likert-bubble" data-name="trust_in_ai" data-value="1">Not at all Trusting</button>
+                    <button type="button" class="likert-bubble" data-name="trust_in_ai" data-value="2">Slightly Trusting</button>
+                    <button type="button" class="likert-bubble" data-name="trust_in_ai" data-value="3">Somewhat Trusting</button>
+                    <button type="button" class="likert-bubble" data-name="trust_in_ai" data-value="4">Moderately Trusting</button>
+                    <button type="button" class="likert-bubble" data-name="trust_in_ai" data-value="5">Quite Trusting</button>
+                    <button type="button" class="likert-bubble" data-name="trust_in_ai" data-value="6">Very Trusting</button>
+                    <button type="button" class="likert-bubble" data-name="trust_in_ai" data-value="7">Extremely Trusting</button>
+                </div>
+                <input type="hidden" name="trust_in_ai" value="">
+
+                <!-- Demographics -->
+                <label>Age:</label>
+                <input type="number" name="age" min="18" max="100" required>
+
+                <label>Gender:</label>
+                <select name="gender" required>
+                    <option value="" disabled selected>Select...</option>
+                    <option value="male">Male</option>
+                    <option value="female">Female</option>
+                    <option value="non_binary">Non-binary</option>
+                    <option value="prefer_not_say">Prefer not to say</option>
+                    <option value="other">Other</option>
+                </select>
+
+                <label>Highest level of education completed:</label>
+                <select name="education" required>
+                    <option value="" disabled selected>Select...</option>
+                    <option value="less_than_high_school">Less than high school</option>
+                    <option value="high_school">High school diploma/GED</option>
+                    <option value="some_college">Some college</option>
+                    <option value="associates">Associate's degree</option>
+                    <option value="bachelors">Bachelor's degree</option>
+                    <option value="masters">Master's degree</option>
+                    <option value="doctorate">Doctoral/Professional degree</option>
+                </select>
+
+                <label>Is English your first language?</label>
+                <select name="english_first_language" required>
+                    <option value="" disabled selected>Select...</option>
+                    <option value="yes">Yes</option>
+                    <option value="no">No</option>
+                </select>
+
+                <label>Ethnicity (check all that apply):</label>
+                <div class="checkbox-group">
+                    <label><input type="checkbox" name="ethnicity" value="white"> White/Caucasian</label>
+                    <label><input type="checkbox" name="ethnicity" value="black"> Black/African American</label>
+                    <label><input type="checkbox" name="ethnicity" value="hispanic"> Hispanic/Latino</label>
+                    <label><input type="checkbox" name="ethnicity" value="asian"> Asian</label>
+                    <label><input type="checkbox" name="ethnicity" value="native_american"> Native American/Alaska Native</label>
+                    <label><input type="checkbox" name="ethnicity" value="pacific_islander"> Native Hawaiian/Pacific Islander</label>
+                    <label><input type="checkbox" name="ethnicity" value="middle_eastern"> Middle Eastern/North African</label>
+                    <label><input type="checkbox" name="ethnicity" value="other"> Other</label>
+                    <label><input type="checkbox" name="ethnicity" value="prefer_not_say"> Prefer not to say</label>
+                </div>
+
+                <label>Annual household income:</label>
+                <select name="income" required>
+                    <option value="" disabled selected>Select...</option>
+                    <option value="under_25k">Under $25,000</option>
+                    <option value="25k_50k">$25,000 - $49,999</option>
+                    <option value="50k_75k">$50,000 - $74,999</option>
+                    <option value="75k_100k">$75,000 - $99,999</option>
+                    <option value="100k_150k">$100,000 - $149,999</option>
+                    <option value="150k_plus">$150,000 or more</option>
+                    <option value="prefer_not_say">Prefer not to say</option>
+                </select>
+
+                <label>Political affiliation:</label>
+                <select name="political_affiliation" required>
+                    <option value="" disabled selected>Select...</option>
+                    <option value="very_progressive">Very Progressive/Far Left</option>
+                    <option value="progressive">Progressive</option>
+                    <option value="liberal">Liberal</option>
+                    <option value="moderate_liberal">Moderate Liberal</option>
+                    <option value="moderate">Moderate/Centrist</option>
+                    <option value="moderate_conservative">Moderate Conservative</option>
+                    <option value="conservative">Conservative</option>
+                    <option value="very_conservative">Very Conservative/Far Right</option>
+                    <option value="libertarian">Libertarian</option>
+                    <option value="independent">Independent/No Affiliation</option>
+                    <option value="other">Other</option>
+                    <option value="prefer_not_say">Prefer not to say</option>
+                </select>
+
+                <label>Social media platforms you use (check all that apply):</label>
+                <div class="checkbox-group">
+                    <label><input type="checkbox" name="social_media" value="x_twitter"> X (Twitter)</label>
+                    <label><input type="checkbox" name="social_media" value="facebook"> Facebook</label>
+                    <label><input type="checkbox" name="social_media" value="instagram"> Instagram</label>
+                    <label><input type="checkbox" name="social_media" value="tiktok"> TikTok</label>
+                    <label><input type="checkbox" name="social_media" value="reddit"> Reddit</label>
+                    <label><input type="checkbox" name="social_media" value="youtube"> YouTube</label>
+                    <label><input type="checkbox" name="social_media" value="linkedin"> LinkedIn</label>
+                    <label><input type="checkbox" name="social_media" value="snapchat"> Snapchat</label>
+                    <label><input type="checkbox" name="social_media" value="threads"> Threads</label>
+                    <label><input type="checkbox" name="social_media" value="bluesky"> Bluesky</label>
+                    <label><input type="checkbox" name="social_media" value="none"> None</label>
+                    <label><input type="checkbox" name="social_media" value="other"> Other</label>
+                </div>
+
+                <label>Hours of internet use per week:</label>
+                <select name="internet_usage_per_week" required>
+                    <option value="" disabled selected>Select...</option>
+                    <option value="1">Less than 1 hour</option>
+                    <option value="2">1-5 hours</option>
+                    <option value="3">6-10 hours</option>
+                    <option value="4">11-20 hours</option>
+                    <option value="5">21-40 hours</option>
+                    <option value="6">More than 40 hours</option>
+                </select>
+
+                <button type="submit">Submit &amp; Continue</button>
+            </form>
+            <div id="demographics-loading" class="loading-message" style="display: none;">
+                <div id="progress-bar-container">
+                    <div id="progress-bar"></div>
+                </div>
+                <span>Submitting... please wait.</span>
+            </div>
+        </div>
+
+        <!-- Phase 9: Final page (debrief + GET /complete + Prolific redirect) -->
+        <div id="final-page" class="study-phase" style="display: none;">
+            <div id="debrief-section" style="text-align: left;">
+                <h2 style="text-align: center">Thank You</h2>
+                <p>You have finished the study. Here is a short summary of what it was about.</p>
+                <h3>Purpose of the Research</h3>
+                <p>This study examines how people revise AI-assisted writing when it needs to pass as human-written, and when they decide that the writing is good enough to stop. We record each version of the statement, the detector's verdict on it, your two ratings, and your decision to keep editing or to submit.</p>
+                <h3>What Varied Between Participants</h3>
+                <p>Participants were randomly assigned to different stated purposes for the statement and different bonus amounts. Some participants saw the detector's verdict after every change; others saw it only at the end. The assigned writing assistant also varied. Everyone wrote the same kind of statement.</p>
+                <p>The stated purpose was a scenario for the writing task. Your statement was not sent to any employer, committee, or blog. It was scored only by AI-detection services for this study.</p>
+                <h3>Your Bonus</h3>
+                <p>If you were offered a bonus and earned it, it will be paid through Prolific after the study closes.</p>
+                <h3>Questions or Concerns</h3>
+                <p>If you have any questions about this research, please contact the Principal Investigator, Nykko Vitali, at nvitali@fas.harvard.edu. If you have any concerns about your rights as a research participant, you may contact cuhs@harvard.edu.</p>
+                <h3>Use of Your Data</h3>
+                <p>If you are comfortable with us using your responses, you do not need to do anything. If you would prefer that we not use your responses, please contact the Principal Investigator and we will remove your data from the study and delete it.</p>
+                <p>Thank you again for your participation!</p>
+            </div>
+
+            <div id="completion-box" class="result-box">
+                <p id="completion-status">Getting your completion code...</p>
+                <p id="completion-code-text" style="display: none;">Your completion code: <strong id="completion-code"></strong></p>
+                <div id="completion-error" class="inline-error" style="display: none;"></div>
+            </div>
+
+            <div id="debrief-actions" style="text-align: center; margin-top: 20px;">
+                <button id="complete-retry-button" style="display: none;">Try again</button>
+                <button id="download-debrief-button" class="secondary-button">Download Debrief Form</button>
+                <button id="finish-button" disabled>Finish and return to Prolific</button>
+            </div>
+            <p id="dev-notice" class="muted small" style="display: none; text-align: center;"></p>
+        </div>
+
+        <div id="error-message-area" class="error-message" style="display:none;"></div>
+   </div>
+
+    <!-- Generic blocking modal (fatal errors, notices). One button, text set by script. -->
+    <div id="blocking-modal" class="modal-overlay" style="display: none;">
+        <div class="modal-content">
+            <h3 id="blocking-modal-title" style="text-align: center; margin-top: 0;"></h3>
+            <p id="blocking-modal-message" style="text-align: center;"></p>
+            <button id="blocking-modal-button" style="margin: 20px auto; display: block;">Continue</button>
+        </div>
+    </div>
+
+   <script src="static/script.js"></script>
+</body>
+</html>

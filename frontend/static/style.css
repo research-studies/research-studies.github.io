@@ -1,0 +1,891 @@
+/* General Body and Layout */
+body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    background-color: #f4f4f9;
+    color: #333;
+    margin: 0;
+    padding: 20px;
+    display: flex;
+    justify-content: center;
+    align-items: flex-start;
+    min-height: 100vh;
+ }
+
+ .container {
+    background-color: #fff;
+    padding: 20px 40px;
+    border-radius: 8px;
+    box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+    width: 100%;
+    max-width: 700px;
+    transition: max-width 0.2s ease-in-out;
+ }
+
+ /* The workspace needs two panes side by side */
+ .container.wide {
+    max-width: 1200px;
+ }
+
+ h2, h3, h4 {
+    color: #111;
+ }
+
+ .muted {
+    color: #666;
+ }
+
+ .small {
+    font-size: 13px;
+ }
+
+ /* Form Styling (shared by the cue survey, the post-task survey and demographics) */
+ .study-form {
+    display: flex;
+    flex-direction: column;
+ }
+
+ .study-form > label {
+    margin-top: 22px;
+    font-weight: bold;
+    color: #444;
+ }
+
+ .study-form > label:first-of-type {
+    margin-top: 10px;
+ }
+
+ .form-section-note {
+    margin-top: 28px;
+    margin-bottom: 0;
+    padding: 10px 12px;
+    background-color: #f8f9fa;
+    border-left: 4px solid #007bff;
+    border-radius: 4px;
+    line-height: 1.5;
+ }
+
+ input[type="text"],
+ input[type="number"],
+ select,
+ textarea {
+    width: 100%;
+    padding: 8px;
+    margin-top: 6px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    box-sizing: border-box;
+    font-family: inherit;
+    font-size: 15px;
+ }
+
+ button {
+    background-color: #007bff;
+    color: white;
+    padding: 10px 15px;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+    margin-top: 25px;
+    font-size: 16px;
+    transition: background-color 0.2s;
+ }
+
+ button:hover {
+    background-color: #0056b3;
+ }
+
+ button:disabled {
+    background-color: #a0a0a0;
+    cursor: not-allowed;
+ }
+
+ button.secondary-button {
+    background-color: #fff;
+    color: #007bff;
+    border: 2px solid #007bff;
+ }
+
+ button.secondary-button:hover {
+    background-color: #e7f3ff;
+ }
+
+ button.secondary-button:disabled {
+    color: #999;
+    border-color: #ccc;
+    background-color: #f5f5f5;
+ }
+
+ /* Checkbox Groups */
+ .checkbox-group {
+    margin-top: 8px;
+    padding: 10px;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+ }
+ .checkbox-group label {
+    display: block;
+    margin-bottom: 5px;
+    font-weight: normal;
+ }
+
+ /* Likert Bubble Styles */
+ .likert-bubble-group {
+    display: flex;
+    justify-content: space-between;
+    gap: 5px;
+    margin-top: 10px;
+    margin-bottom: 10px;
+ }
+
+ .likert-bubble {
+    background-color: #f0f0f0;
+    border: 2px solid #ddd;
+    border-radius: 50px;
+    padding: 8px 12px;
+    cursor: pointer;
+    transition: all 0.2s;
+    font-size: 13px;
+    min-width: 60px;
+    text-align: center;
+    color: #333;
+    margin-top: 0;
+ }
+
+ .likert-bubble:hover {
+    background-color: #e0e0e0;
+    border-color: #007bff;
+    transform: scale(1.05);
+ }
+
+ .likert-bubble.selected {
+    background-color: #007bff;
+    border-color: #0056b3;
+    color: white;
+ }
+
+ /* Numeric 1-7 scales: equal round bubbles */
+ .likert-7 .likert-bubble {
+    min-width: 44px;
+    flex: 1 1 0;
+    font-size: 15px;
+    font-weight: 600;
+ }
+
+ .likert-endpoints {
+    margin-top: -4px;
+    margin-bottom: 4px;
+ }
+
+ /* Chat Interface */
+ .chat-window {
+   border: 1px solid #ccc;
+   background-color: #fafafa;
+   height: 420px;
+   overflow-y: auto;
+   padding: 10px 10px 20px 10px; /* Top, Right, BOTTOM, Left - GIVES A 20px BUFFER AT THE BOTTOM */
+   margin-bottom: 10px;
+   scroll-behavior: smooth;
+   box-sizing: border-box; /* Ensures padding doesn't increase the total height */
+}
+ #message-list {
+    display: flex;
+    flex-direction: column;
+ }
+ .message-bubble {
+    padding: 8px 12px;
+    border-radius: 18px;
+    margin-bottom: 8px;
+    max-width: 85%;
+    word-wrap: break-word;
+    white-space: pre-wrap;
+    line-height: 1.45;
+ }
+ .message-bubble.user {
+    background-color: #007bff;
+    color: white;
+    align-self: flex-end;
+ }
+ .message-bubble.assistant {
+    background-color: #e9e9eb;
+    color: #111;
+    align-self: flex-start;
+ }
+ .message-bubble.system {
+    background-color: #fff3cd;
+    color: #856404;
+    align-self: center;
+    font-size: 14px;
+    text-align: center;
+ }
+ .message-actions {
+    align-self: flex-start;
+    margin: -4px 0 12px 0;
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+ }
+ .message-actions button {
+    margin-top: 0;
+    padding: 6px 12px;
+    font-size: 14px;
+ }
+ .message-actions .applied-note {
+    font-size: 13px;
+    color: #28a745;
+    align-self: center;
+ }
+ .chat-input-area {
+    display: flex;
+    align-items: flex-end;
+    gap: 10px;
+ }
+ .chat-input-area textarea {
+    flex-grow: 1;
+    margin-top: 0;
+    resize: vertical;
+    min-height: 60px;
+ }
+ .chat-input-area button {
+    margin-top: 0;
+    padding: 10px 18px;
+    height: 44px;
+ }
+
+ /* Two-pane workspace */
+ .workspace-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 24px;
+    align-items: start;
+    margin-top: 10px;
+ }
+
+ .pane {
+    min-width: 0;
+ }
+
+ .pane h3 {
+    margin-top: 0;
+    margin-bottom: 10px;
+    border-bottom: 2px solid #007bff;
+    padding-bottom: 6px;
+ }
+
+ #workspace-task-reminder {
+    background-color: #f8f9fa;
+    border-radius: 6px;
+    padding: 10px 14px;
+    margin-bottom: 10px;
+    line-height: 1.5;
+ }
+
+ #workspace-task-reminder p {
+    margin: 4px 0;
+ }
+
+ #essay-editor {
+    width: 100%;
+    height: 420px;
+    resize: vertical;
+    margin-top: 0;
+    line-height: 1.5;
+    font-size: 15px;
+    box-sizing: border-box;
+ }
+
+ #essay-editor[readonly] {
+    background-color: #f5f5f5;
+    color: #555;
+ }
+
+ .essay-status-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    margin-top: 6px;
+    gap: 10px;
+ }
+
+ .word-count {
+    font-weight: 600;
+ }
+
+ .word-count.short {
+    color: #b71c1c;
+ }
+
+ .word-count.ok {
+    color: #1e7e34;
+ }
+
+ .essay-buttons {
+    display: flex;
+    justify-content: space-between;
+    gap: 10px;
+    margin-top: 10px;
+ }
+
+ .essay-buttons button {
+    margin-top: 0;
+ }
+
+ @media (max-width: 900px) {
+    .workspace-grid {
+        grid-template-columns: 1fr;
+    }
+    .chat-window,
+    #essay-editor {
+        height: 320px;
+    }
+    .container {
+        padding: 16px 16px;
+    }
+ }
+
+ /* Inline messages inside a pane or form (persist until cleared, unlike #error-message-area) */
+ .inline-error {
+    background-color: #fdecea;
+    color: #b71c1c;
+    border: 1px solid #f5c6cb;
+    border-radius: 6px;
+    padding: 10px 14px;
+    margin: 10px 0;
+    line-height: 1.5;
+ }
+
+ .inline-error button {
+    margin: 8px 8px 0 0;
+    padding: 6px 12px;
+    font-size: 14px;
+ }
+
+ .inline-notice {
+    background-color: #fff3cd;
+    color: #856404;
+    border: 1px solid #ffc107;
+    border-radius: 6px;
+    padding: 10px 14px;
+    margin: 10px 0;
+    text-align: center;
+    line-height: 1.5;
+ }
+
+ /* Rating screen */
+ #assessment-area {
+    text-align: center; /* Center contents by default */
+ }
+
+ #assessment-area h4,
+ #assessment-area > label {
+    text-align: left; /* Keep heading and label left-aligned */
+    display: block; /* Ensure it takes full width */
+    margin-bottom: 10px;
+ }
+
+ .slider-block {
+    margin: 26px 0 18px 0;
+    text-align: left;
+ }
+
+ .slider-question {
+    margin-bottom: 6px;
+    font-size: 1.05em;
+ }
+
+ .slider-value {
+    font-size: 1.1em;
+    font-weight: 500;
+    color: #333;
+    display: inline-block;
+    min-width: 30px; /* Give it some space so layout doesn't jump */
+ }
+
+ .slider-labels {
+    display: flex;
+    justify-content: space-between;
+    position: relative; /* Needed for positioning the center label */
+    margin-top: 4px;
+    padding: 0 5px; /* Adds a little space from the edges */
+ }
+
+ .slider-labels span {
+    font-size: 13px;
+    color: #555;
+    font-weight: 500;
+ }
+
+ .slider-labels .label-center {
+    position: absolute;
+    left: 50%;
+    transform: translateX(-50%); /* The standard CSS centering trick */
+    color: #111;
+ }
+
+ .rating-slider {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 100%; /* Make slider take full width of container */
+    height: 12px; /* Thicker track */
+    background: #e9ecef;
+    border-radius: 6px;
+    outline: none;
+    margin: 10px 0; /* Add some vertical spacing */
+ }
+
+ .rating-slider::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 24px;
+    height: 24px;
+    background: #007bff;
+    border-radius: 50%;
+    cursor: pointer;
+    border: 3px solid #fff;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+    margin-top: -6px; /* Center thumb vertically on the track */
+ }
+
+ .rating-slider::-moz-range-track {
+    width: 100%;
+    height: 12px;
+    background: #e9ecef;
+    border-radius: 6px;
+    cursor: pointer;
+ }
+
+ .rating-slider::-moz-range-thumb {
+    width: 24px;
+    height: 24px;
+    background: #007bff;
+    border-radius: 50%;
+    cursor: pointer;
+    border: 3px solid #fff;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+ }
+
+ /* "Pristine" state: the thumb is invisible until the participant touches the slider */
+ .rating-slider.pristine::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    background: transparent; /* Make the thumb invisible */
+    box-shadow: none;
+    border: none;
+    width: 24px; /* Keep size to not mess up calculations */
+    height: 24px;
+ }
+
+ .rating-slider.pristine::-moz-range-thumb {
+    background: transparent;
+    box-shadow: none;
+    border: none;
+    width: 24px;
+    height: 24px;
+ }
+
+ #rating-buttons {
+    display: flex;
+    justify-content: center;
+    gap: 16px;
+    margin-top: 10px;
+ }
+
+ #rating-buttons button {
+    padding: 12px 24px;
+ }
+
+ .essay-preview-details {
+    margin: 10px 0 6px 0;
+ }
+
+ .essay-preview-details summary {
+    cursor: pointer;
+    color: #007bff;
+    font-weight: 500;
+ }
+
+ .essay-preview {
+    background-color: #f8f9fa;
+    border: 1px solid #e0e0e0;
+    border-radius: 6px;
+    padding: 12px 14px;
+    white-space: pre-wrap;
+    font-family: inherit;
+    font-size: 14px;
+    line-height: 1.5;
+    max-height: 260px;
+    overflow-y: auto;
+    text-align: left;
+ }
+
+ /* Detector verdict panel (feedback group only) */
+ .detector-panel {
+    border: 2px solid #ddd;
+    border-radius: 8px;
+    padding: 14px 18px;
+    margin: 14px 0 6px 0;
+    text-align: center;
+    background-color: #f8f9fa;
+ }
+
+ .detector-panel.pass {
+    border-color: #28a745;
+    background-color: #eaf7ee;
+ }
+
+ .detector-panel.fail {
+    border-color: #dc3545;
+    background-color: #fdecea;
+ }
+
+ .detector-panel.unavailable {
+    border-color: #ffc107;
+    background-color: #fff3cd;
+ }
+
+ .detector-title {
+    margin: 0 0 6px 0;
+    font-size: 14px;
+    color: #555;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+ }
+
+ .detector-label {
+    margin: 0;
+    font-size: 1.3em;
+    font-weight: 600;
+    color: #111;
+ }
+
+ .detector-pass {
+    margin: 6px 0 0 0;
+    font-size: 1.05em;
+    font-weight: 600;
+ }
+
+ .detector-panel.pass .detector-pass {
+    color: #1e7e34;
+ }
+
+ .detector-panel.fail .detector-pass {
+    color: #b71c1c;
+ }
+
+ /* Result and completion boxes */
+ .result-box {
+    background-color: #f8f9fa;
+    border-radius: 8px;
+    padding: 18px 22px;
+    margin: 16px 0;
+    line-height: 1.6;
+    font-size: 1.08em;
+ }
+
+ .result-box p {
+    margin: 8px 0;
+ }
+
+ .result-box .verdict-pass {
+    color: #1e7e34;
+    font-weight: 600;
+ }
+
+ .result-box .verdict-fail {
+    color: #b71c1c;
+    font-weight: 600;
+ }
+
+ /* Misc UI Elements */
+ .loading-message {
+    margin-top: 15px;
+    color: #555;
+    font-style: italic;
+ }
+ .error-message {
+    background-color: #f8d7da;
+    color: #721c24;
+    padding: 10px;
+    border: 1px solid #f5c6cb;
+    border-radius: 4px;
+    margin-top: 20px;
+ }
+
+ /* Defensive rule to hide unexpected elements injected into buttons */
+button > * {
+   display: none !important;
+   pointer-events: none !important;
+}
+
+/* Assistant "working" indicator (three bouncing dots while a reply is pending) */
+#assistant-working {
+   background-color: #e9e9eb; /* Matches the assistant message bubble color */
+   width: fit-content;      /* Make the bubble only as wide as its content */
+   padding: 12px 20px;      /* Slightly larger for a rounder bubble */
+   border-radius: 20px;     /* Slightly more rounded corners */
+   align-self: flex-start;  /* Align it to the left like other assistant messages */
+   margin-bottom: 8px;      /* Space below the indicator */
+   display: flex;           /* Use flexbox to align the dots */
+   align-items: center;     /* Vertically center the dots */
+   gap: 6px;                /* Space between the dots */
+}
+
+.dot {
+   width: 8px;
+   height: 8px;
+   background-color: #8e8e93; /* A nice, medium-grey for the dots */
+   border-radius: 50%;
+   animation: bounce 1.2s infinite ease-in-out;
+}
+
+/* Add animation delays to make the dots bounce sequentially */
+.dot:nth-child(2) {
+   animation-delay: 0.2s;
+}
+
+.dot:nth-child(3) {
+   animation-delay: 0.4s;
+}
+
+/* The bounce animation definition */
+@keyframes bounce {
+   0%, 100% {
+       transform: scale(0.7);
+       opacity: 0.5;
+   }
+   50% {
+       transform: scale(1);
+       opacity: 1;
+   }
+}
+
+/* Loading rows: spinner and text side by side */
+#loading-row,
+#demographics-loading {
+   display: flex;
+   justify-content: center;
+   align-items: center;
+   gap: 12px; /* Adds a nice space between the spinner and the text */
+}
+
+/* Progress bar (demographics submit) */
+#progress-bar-container {
+    width: 80%;
+    height: 18px;
+    background-color: #e9ecef;
+    border-radius: 9px;
+    overflow: hidden; /* Ensures the inner bar has rounded corners */
+}
+
+#progress-bar {
+    width: 0%; /* Start at 0 */
+    height: 100%;
+    background-color: #007bff; /* Blue progress color */
+    border-radius: 9px;
+    transition: width 0.4s ease-in-out; /* Smooths the fill animation */
+}
+
+/* Loading spinner animation */
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+.loading-spinner {
+    display: inline-block;
+    width: 40px;
+    height: 40px;
+    border: 4px solid #f3f3f3;
+    border-top: 4px solid #007bff;
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+}
+
+/* Modal Styles */
+.modal-overlay {
+    position: fixed; /* Sit on top of the page content */
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    background-color: rgba(0, 0, 0, 0.6); /* Black background with opacity */
+    display: flex; /* Use flexbox to center the modal */
+    justify-content: center;
+    align-items: center;
+    z-index: 1000; /* Make sure it's on top */
+}
+
+.modal-content {
+    background-color: #fff;
+    padding: 30px 40px;
+    border-radius: 8px;
+    box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+    width: 90%;
+    max-width: 500px;
+    text-align: center;
+}
+
+.modal-content p {
+    margin-bottom: 25px; /* Space between text and button */
+    font-size: 1.1em;
+    line-height: 1.5;
+    color: #333;
+}
+
+/* Center the confirm button on the instructions page */
+#confirm-instructions-button {
+    display: block;
+    width: fit-content;
+    margin-left: auto;
+    margin-right: auto;
+}
+
+/* Center consent form action buttons */
+#consent-actions {
+    display: flex;
+    justify-content: center;
+    gap: 12px;
+}
+
+/* Improve readability of the Instructions page */
+#instructions-phase {
+    font-size: 1.08rem;
+}
+
+#instructions-phase h2 {
+    font-size: 1.75rem;
+    margin-bottom: 18px;
+}
+
+#instructions-phase p {
+    line-height: 1.65;
+    margin: 10px 0;
+}
+
+/* Emphasize spacing for the key instructions block */
+#instructions-phase p.key-instructions {
+    margin-top: 16px;
+    margin-bottom: 16px;
+}
+
+.purpose-box,
+.bonus-box {
+    background-color: #f8f9fa;
+    border-left: 4px solid #007bff;
+    border-radius: 4px;
+    padding: 12px 14px;
+}
+
+.bonus-box {
+    border-left-color: #28a745;
+    font-weight: 500;
+}
+
+/* Instruction Page Pagination */
+#instructions-pagination-container {
+    min-height: 300px;
+}
+
+.instruction-page {
+    padding: 10px 0;
+}
+
+.instruction-page h3 {
+    margin-top: 0;
+    margin-bottom: 15px;
+    color: #333;
+    border-bottom: 2px solid #007bff;
+    padding-bottom: 8px;
+}
+
+.instruction-content {
+    line-height: 1.6;
+}
+
+.instruction-content p {
+    margin-bottom: 12px;
+}
+
+.instruction-content ol, .instruction-content ul {
+    margin-bottom: 12px;
+    padding-left: 25px;
+}
+
+.instruction-content li {
+    margin-bottom: 6px;
+}
+
+#instruction-nav {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-top: 20px;
+    border-top: 1px solid #eee;
+    padding-top: 15px;
+}
+
+#instruction-prev-btn, #instruction-next-btn {
+    background-color: #007bff;
+    color: white;
+    border: none;
+    border-radius: 5px;
+    padding: 10px 20px;
+    font-size: 16px;
+    cursor: pointer;
+    margin-top: 0;
+    transition: background-color 0.2s;
+}
+
+#instruction-prev-btn:hover, #instruction-next-btn:hover {
+    background-color: #0056b3;
+}
+
+#instruction-page-indicator {
+    font-weight: bold;
+    color: #666;
+}
+
+/* Comprehension check options (from the attention-check markup) */
+.check-question {
+    font-weight: bold;
+    margin: 18px 0 10px 0;
+}
+
+.check-options {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.check-option {
+    display: flex;
+    align-items: flex-start;
+    padding: 10px;
+    background: white;
+    border: 1px solid #ddd;
+    border-radius: 5px;
+    cursor: pointer;
+    font-weight: normal;
+}
+
+.check-option input {
+    margin-right: 10px;
+    margin-top: 3px;
+}
+
+/* Writing time cap (top right) */
+#timer-display {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    background: rgba(0,0,0,0.8);
+    color: white;
+    padding: 10px 15px;
+    border-radius: 5px;
+    font-family: monospace;
+    font-size: 16px;
+    z-index: 1000;
+}
+
+#timer-display.warning {
+    background: #b71c1c;
+}
