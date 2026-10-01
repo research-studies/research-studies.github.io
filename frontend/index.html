@@ -116,11 +116,10 @@
 
         <!-- Phase 2: Cue elicitation (POST /cues) -->
         <div id="cues-phase" class="study-phase" style="display: none;">
-            <h2>Before You Start</h2>
             <p>We would like to know what you look for when you decide whether a piece of writing was produced by an AI. There are no right or wrong answers.</p>
 
             <form id="cues-form" class="study-form">
-                <label for="cues-free-text">What makes writing look AI-generated to you? Please describe it in your own words.</label>
+                <label for="cues-free-text">What makes writing look AI-generated to you? Write down as many tells as you can think of that you personally notice.</label>
                 <textarea id="cues-free-text" name="free_text" rows="5" placeholder="Your answer..."></textarea>
 
                 <p class="form-section-note">For each feature below, rate how strongly it signals to you that a text was written by an AI. 1 = not a signal at all, 7 = a very strong signal.</p>
@@ -251,22 +250,26 @@
                 <div class="instruction-page" id="instruction-page-1" style="display: block;">
                     <div class="instruction-content">
                         <h3>Your Writing Task</h3>
+                        <p>You will be asked to do a writing task with the help of an LLM. All tasks are around 250 words. The goal is for the passage to sound as human as possible before moving on.</p>
                         <p id="instr-topic-text" class="key-instructions"></p>
                         <p><strong>Purpose of the statement:</strong></p>
                         <p id="instr-purpose-text" class="purpose-box"></p>
-                        <p>Everyone in this study writes the same kind of statement. Your goal is a statement that reads as written by a human.</p>
                     </div>
                 </div>
 
-                <!-- Page 2: The workspace -->
+                <!-- Page 2: The workspace (the two panes) -->
                 <div class="instruction-page" id="instruction-page-2" style="display: none;">
                     <div class="instruction-content">
                         <h3>How the Workspace Works</h3>
-                        <p>You will see two panes.</p>
-                        <ul>
-                            <li><strong>Left:</strong> a chat with your assigned writing assistant. The assistant is an AI language model. We do not tell you which one. You can ask it to write a draft, revise a draft, or answer questions. Your current statement is attached to every message you send it.</li>
-                            <li><strong>Right:</strong> the statement editor. You can type in it yourself, or click <em>Use this as my statement</em> under any assistant reply to put that reply in the editor.</li>
-                        </ul>
+                        <p>On the <strong>LEFT</strong> will be a chat with your writing assistant. The assistant is powered by an LLM. We do not tell you which one. For the task, you can ask it to write a draft, revise a draft, or answer any questions to aid you in completing the task.</p>
+                        <p>On the <strong>RIGHT</strong> you will see the passage itself. You can type in it directly, or click <em>Use this as my statement</em> under any assistant reply to put that reply into the editor.</p>
+                    </div>
+                </div>
+
+                <!-- Page 3: Finishing a change, the time limit -->
+                <div class="instruction-page" id="instruction-page-3" style="display: none;">
+                    <div class="instruction-content">
+                        <h3>Finishing a Change</h3>
                         <p>The statement must be at least <strong><span id="instr-min-words">250</span> words</strong>. A live word count is shown under the editor.</p>
                         <p>When you finish a change, click <strong>Done with this change</strong>. You will then rate the statement on two sliders and choose to <strong>keep editing</strong> or <strong>submit</strong>. You can make as many changes as you like within the time limit.</p>
                         <p>You have <strong><span id="instr-time-cap">25</span> minutes</strong> for the writing part. A timer is shown at the top right. When time runs out, your most recent finished version is submitted automatically.</p>
@@ -274,8 +277,8 @@
                     </div>
                 </div>
 
-                <!-- Page 3: The bonus rule -->
-                <div class="instruction-page" id="instruction-page-3" style="display: none;">
+                <!-- Page 4: The bonus rule -->
+                <div class="instruction-page" id="instruction-page-4" style="display: none;">
                     <div class="instruction-content">
                         <h3>Your Bonus Rule</h3>
                         <p id="instr-bonus-rule-text" class="key-instructions bonus-box"></p>
@@ -285,8 +288,8 @@
                     </div>
                 </div>
 
-                <!-- Page 4: Comprehension check (adapted from the attention-check mechanics) -->
-                <div class="instruction-page" id="instruction-page-4" style="display: none;">
+                <!-- Page 5: Comprehension check (adapted from the attention-check mechanics) -->
+                <div class="instruction-page" id="instruction-page-5" style="display: none;">
                     <div class="instruction-content">
                         <h3>Quick Check</h3>
 
@@ -313,7 +316,7 @@
                 <!-- Navigation -->
                 <div id="instruction-nav">
                     <button type="button" id="instruction-prev-btn" style="visibility: hidden;">&larr; Back</button>
-                    <span id="instruction-page-indicator">1 / 4</span>
+                    <span id="instruction-page-indicator">1 / 5</span>
                     <button type="button" id="instruction-next-btn">Next &rarr;</button>
                 </div>
             </div>
@@ -464,8 +467,6 @@
                 </div>
                 <input type="hidden" name="manip_mattered" value="">
 
-                <label for="post-recalled-bonus">What was your bonus amount for this task? (If there was no bonus, write "none".)</label>
-                <input type="text" id="post-recalled-bonus" name="manip_recalled_bonus" placeholder="For example: $1.00 or none">
 
                 <label for="post-recalled-purpose">What was the stated purpose of the statement?</label>
                 <input type="text" id="post-recalled-purpose" name="manip_recalled_purpose" placeholder="In your own words">
