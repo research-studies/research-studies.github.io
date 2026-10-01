@@ -1022,8 +1022,8 @@ document.addEventListener('DOMContentLoaded', () => {
         document.getElementById('instr-time-cap').textContent = String(startData.time_cap_min || 25);
         document.getElementById('instr-bonus-rule-text').textContent = startData.bonus_rule_text || '';
         document.getElementById('instr-feedback-note').textContent = startData.condition_feedback
-            ? 'Because you are in the group that sees the detector, its verdict for each version is shown on the rating screen after every change.'
-            : 'Because you are in the group that does not see the detector while writing, you will see its verdict only after you submit.';
+            ? 'After every change, the detector\'s verdict for that version is shown on the rating screen.'
+            : 'The detector\'s verdict is shown once, after you submit.';
 
         wsTopicText.textContent = startData.topic_text || '';
         wsPurposeText.textContent = startData.purpose_text || '';
@@ -1157,7 +1157,7 @@ This research examines how people write with AI writing assistants and how they 
 What You Will Be Asked to Do
 If you agree to participate, you will:
 - Answer a few short questions about what makes writing look AI-generated to you
-- Write a short personal statement (at least ${minWords()} words) with the help of an AI writing assistant that we assign to you. You can ask the assistant for text, edit the text yourself, or start over
+- Produce a short personal statement (at least ${minWords()} words) using an AI writing assistant that we assign to you. The assistant writes the text; you direct it, ask for revisions, and may make small edits to its wording
 - Each time you finish a change, rate how likely a person and an AI detector would be to judge the statement as human-written, and decide whether to keep editing or to submit
 - Have your submitted statement scored by an AI-detection service
 - Answer short questions about the task, then complete a brief demographic questionnaire
@@ -1457,6 +1457,7 @@ By clicking "I agree", you indicated that:
     // Workspace (chat + editor + timer)
     // =====================================================================================
     function openWorkspace(resumed) {
+        syncEditorLock();
         if (!workspaceOpenedAt) {
             workspaceOpenedAt = Date.now();
             logUiEvent('workspace_opened', { time_cap_min: startData.time_cap_min, min_words: minWords() });
@@ -1530,8 +1531,8 @@ By clicking "I agree", you indicated that:
         const text = essayEditor.value;
         const wc = countWords(text);
         const unchanged = text.trim() === (lastVersionText || '').trim();
-        doneButton.disabled = workspaceLocked || essayBusy || timeExpired || isSubmitted || wc < minWords() || (unchanged && lastVersionText !== null) || !text.trim();
-        startOverButton.disabled = workspaceLocked || essayBusy || timeExpired || isSubmitted || !text.trim();
+        doneButton.disabled = workspaceLocked || essayBusy || timeExpired || isSubmitted || !hasAssistantDraft() || wc < minWords() || (unchanged && lastVersionText !== null) || !text.trim();
+        startOverButton.disabled = workspaceLocked || essayBusy || timeExpired || isSubmitted || !hasAssistantDraft() || !text.trim();
     }
 
     essayEditor.addEventListener('input', () => {
@@ -1691,8 +1692,7 @@ By clicking "I agree", you indicated that:
             if (error.code === 'unknown_session') { handleUnknownSession(); return; }
             if (error.code === 'too_short') {
                 showInlineError(chatErrorDiv,
-                    `${error.message} Ask the assistant to make it longer, or put it in the editor and add to it yourself.`,
-                    'Put it in the editor', () => seedEditorFromReply(msg));
+                    `${error.message} Ask the assistant to make it longer (at least ${minWords()} words).`);
                 return;
             }
             if (error.code === 'unchanged') {
@@ -1724,7 +1724,7 @@ By clicking "I agree", you indicated that:
 
     function finishEssayBusy() {
         essayBusy = false;
-        essayEditor.readOnly = workspaceLocked || timeExpired || isSubmitted;
+        syncEditorLock();
         essayWorkingDiv.style.display = 'none';
         updateDoneButtonState();
     }
@@ -1776,6 +1776,10 @@ By clicking "I agree", you indicated that:
             if (error.code === 'time_cap') { handleTimeExpired('server'); return; }
             if (error.code === 'already_submitted') { recoverSubmitted(); return; }
             if (error.code === 'unknown_session') { handleUnknownSession(); return; }
+            if (error.code === 'assistant_first') {
+                showInlineError(essayErrorDiv, "Start from an assistant reply: click 'Use this as my statement' under one of its replies first.");
+                return;
+            }
             if (error.code === 'too_short' || error.code === 'unchanged') {
                 showInlineError(essayErrorDiv, error.message);
                 return;
@@ -1807,6 +1811,13 @@ By clicking "I agree", you indicated that:
         saveState();
         essayEditor.focus();
     });
+
+    // The statement must come from the assistant: until one reply has been applied, the editor,
+    // Done and Start over stay locked (the backend enforces the same rule: error assistant_first).
+    function hasAssistantDraft() { return versions.some(v => v.source === 'llm_apply'); }
+    function syncEditorLock() {
+        essayEditor.readOnly = workspaceLocked || timeExpired || isSubmitted || essayBusy || !hasAssistantDraft();
+    }
 
     function recordVersion(result, source, text, promptId) {
         const version = {
