@@ -59,7 +59,6 @@ body {
     margin-bottom: 0;
     padding: 10px 12px;
     background-color: #f8f9fa;
-    border-left: 4px solid #007bff;
     border-radius: 4px;
     line-height: 1.5;
  }
@@ -770,13 +769,11 @@ button > * {
 .purpose-box,
 .bonus-box {
     background-color: #f8f9fa;
-    border-left: 4px solid #007bff;
     border-radius: 4px;
     padding: 12px 14px;
 }
 
 .bonus-box {
-    border-left-color: #28a745;
     font-weight: 500;
 }
 
