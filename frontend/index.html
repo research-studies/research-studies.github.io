@@ -12,7 +12,7 @@
 <body>
     <!-- Timer Display - Top Right (writing time cap) -->
     <div id="timer-display" style="display: none;">
-        Time left: <span id="countdown-timer">25:00</span>
+        Time left: <span id="countdown-timer">15:00</span>
     </div>
 
     <div class="container">
@@ -46,12 +46,12 @@
                  <p>If you agree to participate, you will:</p>
                  <ul>
                      <li>Answer a few short questions about what makes writing look AI-generated to you</li>
-                     <li>Write a short personal statement (at least <span class="consent-min-words">250</span> words) with the help of an AI writing assistant that we assign to you. You can ask the assistant for text, edit the text yourself, or start over</li>
+                     <li>Produce a short personal statement (at least <span class="consent-min-words">250</span> words) using an AI writing assistant that we assign to you. The assistant writes the text; you direct it, ask for revisions, and may make small edits to its wording</li>
                      <li>Each time you finish a change, rate how likely a person and an AI detector would be to judge the statement as human-written, and decide whether to keep editing or to submit</li>
                      <li>Have your submitted statement scored by an AI-detection service</li>
                      <li>Answer short questions about the task, then complete a brief demographic questionnaire</li>
-                     <li>The writing part has a time limit of <span class="consent-time-cap">25</span> minutes. The total time commitment is approximately 30 minutes</li>
-                     <li>Please do not include information that could identify you or another person in your writing</li>
+                     <li>The writing part has a time limit of <span class="consent-time-cap">15</span> minutes. The total time commitment is approximately 20 minutes</li>
+                     <li>Please do not include information that could identify you or another person in the statement or in your messages</li>
                  </ul>
 
                  <h4>Your Rights as a Participant</h4>
@@ -77,11 +77,11 @@
                  <h4>Confidentiality</h4>
                  <ul>
                     <li>Your responses will be stored securely</li>
-                    <li>The text you write and your messages to the assistant are sent to the assistant's provider and to AI-detection services for scoring. Your Prolific ID is never sent to these services</li>
+                    <li>The statement text and your messages to the assistant are sent to the assistant's provider and to AI-detection services for scoring. Your Prolific ID is never sent to these services</li>
                     <li>Data will be analyzed without any identifying information</li>
                     <li>Only researchers will have access to the data</li>
                     <li>Anonymized results derived from your data may be shared in scientific databases for transparency of our research process</li>
-                    <li>Any personally identifying information you may include in your writing will be removed from analyses and will not be used in research outputs</li>
+                    <li>Any personally identifying information that appears in the statement or messages will be removed from analyses and will not be used in research outputs</li>
                  </ul>
 
                  <h4>Questions or Concerns?</h4>
@@ -262,7 +262,7 @@
                     <div class="instruction-content">
                         <h3>How the Workspace Works</h3>
                         <p>On the <strong>LEFT</strong> will be a chat with your writing assistant. The assistant is powered by an LLM. We do not tell you which one. For the task, you can ask it to write a draft, revise a draft, or answer any questions to aid you in completing the task.</p>
-                        <p>On the <strong>RIGHT</strong> you will see the passage itself. You can type in it directly, or click <em>Use this as my statement</em> under any assistant reply to put that reply into the editor.</p>
+                        <p>On the <strong>RIGHT</strong> you will see the passage the assistant produces. Click <em>Use this as my statement</em> under an assistant reply to place it there. The statement must come from the assistant; once it is there you may ask the assistant for revisions or make small edits to its wording yourself.</p>
                     </div>
                 </div>
 
@@ -272,8 +272,8 @@
                         <h3>Finishing a Change</h3>
                         <p>The statement must be at least <strong><span id="instr-min-words">250</span> words</strong>. A live word count is shown under the editor.</p>
                         <p>When you finish a change, click <strong>Done with this change</strong>. You will then rate the statement on two sliders and choose to <strong>keep editing</strong> or <strong>submit</strong>. You can make as many changes as you like within the time limit.</p>
-                        <p>You have <strong><span id="instr-time-cap">25</span> minutes</strong> for the writing part. A timer is shown at the top right. When time runs out, your most recent finished version is submitted automatically.</p>
-                        <p><strong>Do not refresh the page</strong> while you are writing.</p>
+                        <p>You have <strong><span id="instr-time-cap">15</span> minutes</strong> for the writing part. A timer is shown at the top right. When time runs out, your most recent finished version is submitted automatically.</p>
+                        <p><strong>Do not refresh the page</strong> during the task.</p>
                     </div>
                 </div>
 
@@ -357,7 +357,7 @@
                 <!-- Right: statement editor -->
                 <div class="pane essay-pane">
                     <h3>Your statement</h3>
-                    <textarea id="essay-editor" placeholder="Your statement goes here. Type it yourself, or use an assistant reply."></textarea>
+                    <textarea id="essay-editor" placeholder="The assistant's draft will appear here once you click 'Use this as my statement' under one of its replies."></textarea>
                     <div class="essay-status-row">
                         <span id="word-count" class="word-count short">0 / 250 words</span>
                         <span id="word-count-status" class="muted small"></span>
