@@ -886,3 +886,6 @@ button > * {
 #timer-display.warning {
     background: #b71c1c;
 }
+
+/* The writing task itself is bold on the instructions page */
+#instr-topic-text { font-weight: 700; }
