@@ -54,7 +54,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const confirmInstructionsButton = document.getElementById('confirm-instructions-button');
     const comprehensionErrorEl = document.getElementById('comprehension-check-error');
     let currentInstructionPage = 1;
-    const totalInstructionPages = 4;
+    const totalInstructionPages = 5;
 
     // Phase 4: workspace
     const workspacePhaseDiv = document.getElementById('workspace-phase');
@@ -107,7 +107,6 @@ document.addEventListener('DOMContentLoaded', () => {
     const postSurveyForm = document.getElementById('post-survey-form');
     const postWhatChanged = document.getElementById('post-what-changed');
     const postMostHelpful = document.getElementById('post-most-helpful');
-    const postRecalledBonus = document.getElementById('post-recalled-bonus');
     const postRecalledPurpose = document.getElementById('post-recalled-purpose');
     const postSurveyLoadingDiv = document.getElementById('post-survey-loading');
 
@@ -188,6 +187,12 @@ document.addEventListener('DOMContentLoaded', () => {
     // Progress flags (drive resume after a refresh)
     let consentDone = false;
     let cuesDone = false;
+    // The cue questions are asked BEFORE the task or AFTER the result, assigned by the server
+    // (start response field cues_position). Default to 'before' if the field is missing.
+    function cuesAfter() { return !!(startData && startData.cues_position === 'after'); }
+    function afterConsent() { if (cuesAfter()) { showInstructions(); } else { showMainPhase('cues'); } }
+    function afterCues() { if (cuesAfter()) { showMainPhase('post_survey'); } else { showInstructions(); } }
+    function afterResult() { if (cuesAfter() && !cuesDone) { showMainPhase('cues'); } else { showMainPhase('post_survey'); } }
     let checkPassed = false;
     let resultAcknowledged = false;
     let postSurveyDone = false;
@@ -1061,7 +1066,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (consentDone) enableSuspiciousBehaviorTracking();
 
         if (!consentDone) { showMainPhase('consent'); return; }
-        if (!cuesDone) { showMainPhase('cues'); return; }
+        if (!cuesAfter() && !cuesDone) { showMainPhase('cues'); return; }
         if (!checkPassed) { showInstructions(); return; }
         if (noStatement && !resultAcknowledged) { showNoStatementResult(); return; }
         if (!isSubmitted && !noStatement) {
@@ -1073,6 +1078,7 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
         if (!resultAcknowledged) { showResult(); return; }
+        if (cuesAfter() && !cuesDone) { showMainPhase('cues'); return; }
         if (!postSurveyDone) { showMainPhase('post_survey'); return; }
         if (!demographicsDone) { showMainPhase('demographics'); return; }
         showFinalPage();
@@ -1128,7 +1134,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     skipConsentDownloadButton.addEventListener('click', () => {
         logUiEvent('consent_skip_download_clicked');
-        showMainPhase('cues');
+        afterConsent();
     });
 
     downloadConsentButton.addEventListener('click', () => {
@@ -1194,7 +1200,7 @@ By clicking "I agree", you indicated that:
 [PARTICIPANT ACCEPTED THE ABOVE TERMS ON ${timestamp}]
         `;
         generateAndDownloadPdf(consentText, `Consent_Form_${sessionToken || 'participant'}.pdf`);
-        showMainPhase('cues');
+        afterConsent();
     });
 
     function generateAndDownloadPdf(content, filename) {
@@ -1281,7 +1287,7 @@ By clicking "I agree", you indicated that:
             cuesDone = true;
             saveState();
             cuesLoadingDiv.style.display = 'none';
-            showInstructions();
+            afterCues();
         } catch (error) {
             cuesLoadingDiv.style.display = 'none';
             setFormControlsDisabled(cuesForm, false);
@@ -2203,7 +2209,7 @@ By clicking "I agree", you indicated that:
         resultAcknowledged = true;
         logUiEvent('result_continue_clicked');
         saveState();
-        showMainPhase('post_survey');
+        afterResult();
     });
 
     // =====================================================================================
@@ -2219,13 +2225,11 @@ By clicking "I agree", you indicated that:
         const mostHelpful = postMostHelpful.value.trim();
         const formData = new FormData(postSurveyForm);
         const mattered = formData.get('manip_mattered');
-        const recalledBonus = postRecalledBonus.value.trim();
         const recalledPurpose = postRecalledPurpose.value.trim();
 
         if (!whatChanged) { showFormError(postSurveyForm, 'Please tell us what you changed and why.', postWhatChanged); return; }
         if (!mostHelpful) { showFormError(postSurveyForm, 'Please tell us which edits helped most.', postMostHelpful); return; }
         if (!mattered) { showFormError(postSurveyForm, 'Please answer the highlighted rating question.', likertGroupEl(postSurveyForm, 'manip_mattered')); return; }
-        if (!recalledBonus) { showFormError(postSurveyForm, 'Please write your bonus amount, or "none".', postRecalledBonus); return; }
         if (!recalledPurpose) { showFormError(postSurveyForm, 'Please write the stated purpose of the statement.', postRecalledPurpose); return; }
 
         logUiEvent('post_survey_input_provenance', { what_changed: postWhatChangedTracker.buildSummary(whatChanged), most_helpful: postMostHelpfulTracker.buildSummary(mostHelpful) });
@@ -2238,7 +2242,6 @@ By clicking "I agree", you indicated that:
                 most_helpful_text: mostHelpful,
                 checklist: {},
                 manip_mattered_1to7: parseInt(mattered, 10),
-                manip_recalled_bonus: recalledBonus,
                 manip_recalled_purpose: recalledPurpose
             });
             postSurveyDone = true;
