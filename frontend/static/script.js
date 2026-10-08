@@ -187,6 +187,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // Progress flags (drive resume after a refresh)
     let consentDone = false;
     let cuesDone = false;
+    function hasBonus() { return Number((startData && startData.bonus_usd) || 0) > 0; }
     // The cue questions are asked BEFORE the task or AFTER the result, assigned by the server
     // (start response field cues_position). Default to 'before' if the field is missing.
     function cuesAfter() { return !!(startData && startData.cues_position === 'after'); }
@@ -1020,14 +1021,26 @@ document.addEventListener('DOMContentLoaded', () => {
         document.getElementById('instr-purpose-text').textContent = startData.purpose_text || '';
         document.getElementById('instr-min-words').textContent = String(mw);
         document.getElementById('instr-time-cap').textContent = String(startData.time_cap_min || 25);
-        document.getElementById('instr-bonus-rule-text').textContent = startData.bonus_rule_text || '';
+        const bonusOn = hasBonus();
+        const ruleEl = document.getElementById('instr-bonus-rule-text');
+        ruleEl.textContent = bonusOn ? (startData.bonus_rule_text || '') : '';
+        ruleEl.style.display = bonusOn ? '' : 'none';
+        document.getElementById('instr-scoring-heading').textContent = bonusOn ? 'Your Bonus Rule' : 'How Your Statement Is Scored';
+        document.getElementById('instr-check-lead').textContent = bonusOn
+            ? 'Please read the rule above carefully. On the next page we ask two short questions about it.'
+            : 'On the next page we ask a short question about the instructions.';
+        document.getElementById('debrief-bonus').style.display = bonusOn ? '' : 'none';
+        if (!bonusOn) {
+            document.getElementById('debrief-varied').textContent = 'Participants were randomly assigned to different stated purposes for the statement. Some participants saw the detector\'s verdict after every change; others saw it only at the end. The assigned writing assistant also varied. Everyone wrote the same kind of statement.';
+        }
         document.getElementById('instr-feedback-note').textContent = startData.condition_feedback
             ? 'After every change, the detector\'s verdict for that version is shown on the rating screen.'
             : 'The detector\'s verdict is shown once, after you submit.';
 
         wsTopicText.textContent = startData.topic_text || '';
         wsPurposeText.textContent = startData.purpose_text || '';
-        wsBonusReminder.textContent = startData.bonus_rule_text || '';
+        wsBonusReminder.textContent = bonusOn ? (startData.bonus_rule_text || '') : '';
+        wsBonusReminder.style.display = bonusOn ? '' : 'none';
         wordCountEl.textContent = `0 / ${mw} words`;
     }
 
@@ -1422,21 +1435,24 @@ By clicking "I agree", you indicated that:
         });
         document.querySelectorAll('input[name="check-q1"], input[name="check-q2"]').forEach(r => { r.checked = false; });
 
-        logUiEvent('comprehension_check_shown', { q1_correct_index: checkQ1CorrectIndex, q2_correct_index: checkQ2CorrectIndex });
+        const showQ1 = hasBonus();
+        document.getElementById('check-q1-text').style.display = showQ1 ? '' : 'none';
+        document.getElementById('check-q1-options').style.display = showQ1 ? '' : 'none';
+        logUiEvent('comprehension_check_shown', { q1_shown: showQ1, q1_correct_index: checkQ1CorrectIndex, q2_correct_index: checkQ2CorrectIndex });
     }
 
     function validateComprehensionCheck() {
         const s1 = document.querySelector('input[name="check-q1"]:checked');
         const s2 = document.querySelector('input[name="check-q2"]:checked');
-        if (!s1 || !s2) {
-            comprehensionErrorEl.textContent = 'Please answer both questions.';
+        if ((hasBonus() && !s1) || !s2) {
+            comprehensionErrorEl.textContent = hasBonus() ? 'Please answer both questions.' : 'Please answer the question.';
             comprehensionErrorEl.style.display = 'block';
             return false;
         }
         comprehensionAttempts++;
-        const i1 = parseInt(s1.value, 10);
+        const i1 = s1 ? parseInt(s1.value, 10) : -1;
         const i2 = parseInt(s2.value, 10);
-        const ok1 = i1 === checkQ1CorrectIndex;
+        const ok1 = hasBonus() ? i1 === checkQ1CorrectIndex : true;
         const ok2 = i2 === checkQ2CorrectIndex;
         logUiEvent('comprehension_check_submitted', { attempt: comprehensionAttempts, q1_selected: i1, q2_selected: i2, q1_correct: ok1, q2_correct: ok2 });
 
@@ -2177,11 +2193,11 @@ By clicking "I agree", you indicated that:
         if (f.unavailable) {
             resultVerdict.textContent = 'Your statement was submitted.';
             resultPassed.textContent = 'We could not load the final verdict right now. The research team will review it.';
-            resultBonus.textContent = bonus > 0 ? `Your bonus rule was a ${formatMoney(bonus)} bonus if the statement is rated more likely human than AI.` : 'This task had no bonus.';
+            resultBonus.textContent = bonus > 0 ? `Your bonus rule was a ${formatMoney(bonus)} bonus if the statement is rated more likely human than AI.` : '';
         } else if (f.scoring_unavailable || (f.pangram_label === null && f.passed === null)) {
             resultVerdict.textContent = 'Your statement was submitted, but the detector could not score it right now.';
-            resultPassed.textContent = 'The research team will score it and review any bonus you are owed.';
-            resultBonus.textContent = bonus > 0 ? `Your bonus rule was a ${formatMoney(bonus)} bonus if the statement is rated more likely human than AI.` : 'This task had no bonus.';
+            resultPassed.textContent = bonus > 0 ? 'The research team will score it and review any bonus you are owed.' : 'The research team will score it.';
+            resultBonus.textContent = bonus > 0 ? `Your bonus rule was a ${formatMoney(bonus)} bonus if the statement is rated more likely human than AI.` : '';
         } else {
             const passed = f.passed === true;
             resultVerdict.textContent = f.pangram_label
@@ -2194,10 +2210,11 @@ By clicking "I agree", you indicated that:
                     ? `You earned the ${formatMoney(bonus)} bonus. It will be paid through Prolific after the study closes.`
                     : `You did not earn the ${formatMoney(bonus)} bonus.`;
             } else {
-                resultBonus.textContent = 'This task had no bonus.';
+                resultBonus.textContent = '';
             }
         }
         resultNote.textContent = f.already_submitted ? 'This statement had already been submitted earlier.' : '';
+        resultBonus.style.display = resultBonus.textContent ? '' : 'none';
         showMainPhase('result');
     }
 
@@ -2210,9 +2227,10 @@ By clicking "I agree", you indicated that:
         resultPassed.className = 'verdict-fail';
         resultVerdict.textContent = 'Time is up.';
         resultPassed.textContent = `No statement of at least ${minWords()} words was recorded, so there is nothing for the detector to score.`;
-        resultBonus.textContent = Number(startData.bonus_usd || 0) > 0 ? 'No bonus was earned.' : 'This task had no bonus.';
+        resultBonus.textContent = Number(startData.bonus_usd || 0) > 0 ? 'No bonus was earned.' : '';
         resultNote.textContent = 'Please continue to the final questions.';
         saveState();
+        resultBonus.style.display = resultBonus.textContent ? '' : 'none';
         showMainPhase('result');
     }
 
@@ -2475,14 +2493,11 @@ Purpose of the Research
 This study examines how people revise AI-assisted writing when it needs to pass as human-written, and when they decide that the writing is good enough to stop. We record each version of the statement, the detector's verdict on it, your two ratings, and your decision to keep editing or to submit.
 
 What Varied Between Participants
-Participants were randomly assigned to different stated purposes for the statement and different bonus amounts. Some participants saw the detector's verdict after every change; others saw it only at the end. The assigned writing assistant also varied. Everyone wrote the same kind of statement.
+Participants were randomly assigned to different stated purposes for the statement${hasBonus() ? ' and different bonus amounts' : ''}. Some participants saw the detector's verdict after every change; others saw it only at the end. The assigned writing assistant also varied. Everyone wrote the same kind of statement.
 
 The stated purpose was a scenario for the writing task. Your statement was not sent to any employer, committee, or blog. It was scored only by AI-detection services for this study.
 
-Your Bonus
-If you were offered a bonus and earned it, it will be paid through Prolific after the study closes.
-
-Questions or Concerns
+${hasBonus() ? 'Your Bonus\nIf you were offered a bonus and earned it, it will be paid through Prolific after the study closes.\n\n' : ''}Questions or Concerns
 If you have any questions about this research, please contact the Principal Investigator, Nykko Vitali, at nvitali@fas.harvard.edu. If you have any concerns about your rights as a research participant, you may contact cuhs@harvard.edu.
 
 Use of Your Data
