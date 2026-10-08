@@ -261,7 +261,7 @@
                 <div class="instruction-page" id="instruction-page-2" style="display: none;">
                     <div class="instruction-content">
                         <h3>How the Workspace Works</h3>
-                        <p>On the <strong>LEFT</strong> will be a chat with your writing assistant. The assistant is powered by an LLM. We do not tell you which one. For the task, you can ask it to write a draft, revise a draft, or answer any questions to aid you in completing the task.</p>
+                        <p>On the <strong>LEFT</strong> will be a chat with your writing assistant. The assistant is powered by an LLM. For the task, you can ask it to write a draft, revise a draft, or answer any questions to aid you in completing the task.</p>
                         <p>On the <strong>RIGHT</strong> you will see the passage the assistant produces. Click <em>Use this as my statement</em> under an assistant reply to place it there. The statement must come from the assistant; once it is there you may ask the assistant for revisions or make small edits to its wording yourself.</p>
                     </div>
                 </div>
@@ -280,11 +280,11 @@
                 <!-- Page 4: The bonus rule -->
                 <div class="instruction-page" id="instruction-page-4" style="display: none;">
                     <div class="instruction-content">
-                        <h3>Your Bonus Rule</h3>
+                        <h3 id="instr-scoring-heading">Your Bonus Rule</h3>
                         <p id="instr-bonus-rule-text" class="key-instructions bonus-box"></p>
                         <p>Your submitted statement is scored by an AI-detection service. The detector gives one verdict: more likely written by a human, or more likely written by an AI.</p>
                         <p id="instr-feedback-note"></p>
-                        <p>Please read the rule above carefully. On the next page we ask two short questions about it.</p>
+                        <p id="instr-check-lead">Please read the rule above carefully. On the next page we ask two short questions about it.</p>
                     </div>
                 </div>
 
@@ -683,10 +683,12 @@
                 <h3>Purpose of the Research</h3>
                 <p>This study examines how people revise AI-assisted writing when it needs to pass as human-written, and when they decide that the writing is good enough to stop. We record each version of the statement, the detector's verdict on it, your two ratings, and your decision to keep editing or to submit.</p>
                 <h3>What Varied Between Participants</h3>
-                <p>Participants were randomly assigned to different stated purposes for the statement and different bonus amounts. Some participants saw the detector's verdict after every change; others saw it only at the end. The assigned writing assistant also varied. Everyone wrote the same kind of statement.</p>
+                <p id="debrief-varied">Participants were randomly assigned to different stated purposes for the statement and different bonus amounts. Some participants saw the detector's verdict after every change; others saw it only at the end. The assigned writing assistant also varied. Everyone wrote the same kind of statement.</p>
                 <p>The stated purpose was a scenario for the writing task. Your statement was not sent to any employer, committee, or blog. It was scored only by AI-detection services for this study.</p>
+                <div id="debrief-bonus">
                 <h3>Your Bonus</h3>
                 <p>If you were offered a bonus and earned it, it will be paid through Prolific after the study closes.</p>
+                </div>
                 <h3>Questions or Concerns</h3>
                 <p>If you have any questions about this research, please contact the Principal Investigator, Nykko Vitali, at nvitali@fas.harvard.edu. If you have any concerns about your rights as a research participant, you may contact cuhs@harvard.edu.</p>
                 <h3>Use of Your Data</h3>
