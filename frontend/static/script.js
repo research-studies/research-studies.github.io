@@ -187,6 +187,19 @@ document.addEventListener('DOMContentLoaded', () => {
     // Progress flags (drive resume after a refresh)
     let consentDone = false;
     let cuesDone = false;
+    // ---------------------------------------------------------------------------------------
+    // STUDY 1 WORDING (pre-filled AI draft, hand edits only). Draft text written by Claude for
+    // Nykko to rewrite. Only used when the server says study_mode = "prefill".
+    // ---------------------------------------------------------------------------------------
+    const STUDY1_TEXT = {
+        taskIntro: 'You will be given a statement of around 250 words that was written by an AI. Your task is to edit it so it sounds as human as possible before moving on.',
+        workspace: 'You will see the AI-written statement in an editor. You can change it however you like: rewrite sentences, cut or add words, or fix anything that sounds off. Start over puts the original statement back.',
+        consentPurpose: 'This research examines how people edit AI-written text and how they judge whether a piece of writing looks human-written.',
+        consentTask: (mw) => `Edit a short personal statement (about ${mw} words) that was written by an AI, so that it reads as human-written`,
+        consentData: 'The statement text is sent to AI-detection services for scoring. Your Prolific ID is never sent to these services',
+        startOverConfirm: 'Put the original statement back in the editor? Your last recorded version is kept on our side.'
+    };
+    function isPrefill() { return !!(startData && startData.study_mode === 'prefill'); }
     function hasBonus() { return Number((startData && startData.bonus_usd) || 0) > 0; }
     // The cue questions are asked BEFORE the task or AFTER the result, assigned by the server
     // (start response field cues_position). Default to 'before' if the field is missing.
@@ -530,11 +543,19 @@ document.addEventListener('DOMContentLoaded', () => {
 
     let telemetryInFlight = false;
     async function flushTelemetry(useKeepalive) {
+        try { drainRecording(); } catch (e) { /* ignore */ }
         if (!sessionToken || telemetryQueue.length === 0) return;
         if (telemetryInFlight && !useKeepalive) return;
-        // keepalive bodies are capped at 64 KB by browsers: send small chunks on page hide
-        const chunkSize = useKeepalive ? 40 : 500;
-        const events = telemetryQueue.splice(0, chunkSize);
+        // keepalive bodies are capped at 64 KB by browsers: on page hide send chunks under ~48 KB
+        let events;
+        if (useKeepalive) {
+            events = []; let bytes = 0;
+            while (telemetryQueue.length && (events.length === 0 || bytes + JSON.stringify(telemetryQueue[0]).length < 48000)) {
+                const ev = telemetryQueue.shift(); bytes += JSON.stringify(ev).length; events.push(ev);
+            }
+        } else {
+            events = telemetryQueue.splice(0, 500);
+        }
         telemetryInFlight = true;
         try {
             await fetch(`/api/session/${sessionToken}/telemetry`, {
@@ -555,12 +576,163 @@ document.addEventListener('DOMContentLoaded', () => {
 
     setInterval(() => flushTelemetry(false), TELEMETRY_FLUSH_MS);
 
+
+    // =====================================================================================
+    // Full behavior recording (starts after consent): every key press and release, every
+    // change to any text box (stored as an exact edit so the writing can be replayed letter by
+    // letter), caret and selection moves, focus changes, mouse movement (20 samples/s), clicks,
+    // touches, scrolling (page and inside boxes), and window size. Rows are buffered and sent as
+    // compact batches with each telemetry flush: event "rec_<kind>", payload {cols, rows}.
+    // =====================================================================================
+    const REC = { keys: [], edits: [], carets: [], focus: [], mouse: [], clicks: [], scrolls: [] };
+    const REC_COLS = {
+        keys:    ['t_ms', 'down_up', 'key', 'code', 'field', 'sel_start', 'sel_end', 'field_len', 'mods_shift1_ctrl2_alt4_meta8', 'repeat'],
+        edits:   ['t_ms', 'seq', 'field', 'pos', 'deleted_chars', 'inserted_text', 'input_type', 'new_len'],
+        carets:  ['t_ms', 'field', 'sel_start', 'sel_end', 'selected_text_len'],
+        focus:   ['t_ms', 'in_out', 'field'],
+        mouse:   ['t_ms', 'x', 'y', 'page_scroll_x', 'page_scroll_y'],
+        clicks:  ['t_ms', 'type', 'x', 'y', 'button', 'target'],
+        scrolls: ['t_ms', 'target', 'scroll_top', 'scroll_left']
+    };
+    const REC_MAX_ROWS = 300;            // rows per batch event (keeps each request small)
+    const recLastValue = {};             // last known text of each field, for edit diffs
+    const recPending = {};               // value captured just before each edit (beforeinput)
+    let recSeq = 0, recLastMouse = 0, recLastCaret = 0;
+    const recLastScroll = {};
+
+    function recOn() { return suspiciousBehaviorTrackingEnabled; }
+    function recField(el) {
+        if (!el || el === document || el === window) return 'window';
+        if (el.id) return el.id;
+        if (el.name) return 'name:' + el.name;
+        return (el.tagName || '?').toLowerCase() + (el.className && typeof el.className === 'string' ? '.' + el.className.split(' ')[0] : '');
+    }
+    function recIsText(el) {
+        return !!el && (el.tagName === 'TEXTAREA' || (el.tagName === 'INPUT' && /^(text|search|email|number|tel|url)?$/i.test(el.type || '')));
+    }
+    function recMods(e) { return (e.shiftKey ? 1 : 0) | (e.ctrlKey ? 2 : 0) | (e.altKey ? 4 : 0) | (e.metaKey ? 8 : 0); }
+
+    // A text field changed by code (draft loaded, start over, reply placed, resume): store the whole value
+    function noteValueSet(el, reason) {
+        try {
+            if (!el) return;
+            const id = recField(el);
+            const prev = recLastValue[id];
+            recLastValue[id] = el.value;
+            if (!recOn()) return;
+            REC.edits.push([nowMs(), ++recSeq, id, 0, prev == null ? -1 : prev.length, el.value, 'set:' + reason, el.value.length]);
+        } catch (e) { /* never break the page */ }
+    }
+
+    function recKey(e, dir) {
+        if (!recOn()) return;
+        try {
+            const el = e.target; const txt = recIsText(el);
+            REC.keys.push([nowMs(), dir, e.key, e.code, recField(el), txt ? el.selectionStart : null, txt ? el.selectionEnd : null,
+                           txt ? el.value.length : null, recMods(e), e.repeat ? 1 : 0]);
+        } catch (err) { /* ignore */ }
+    }
+    document.addEventListener('keydown', e => recKey(e, 'd'), true);
+    document.addEventListener('keyup', e => recKey(e, 'u'), true);
+
+    document.addEventListener('beforeinput', e => {
+        if (!recIsText(e.target)) return;
+        recPending[recField(e.target)] = { before: e.target.value, type: e.inputType || '' };
+    }, true);
+    document.addEventListener('input', e => {
+        const el = e.target;
+        if (!recIsText(el)) return;
+        try {
+            const id = recField(el);
+            const pend = recPending[id]; delete recPending[id];
+            const before = pend ? pend.before : (recLastValue[id] != null ? recLastValue[id] : '');
+            const after = el.value;
+            recLastValue[id] = after;
+            if (!recOn() || before === after) return;
+            let p = 0; const maxP = Math.min(before.length, after.length);
+            while (p < maxP && before.charCodeAt(p) === after.charCodeAt(p)) p++;
+            let q = 0; const maxQ = Math.min(before.length, after.length) - p;
+            while (q < maxQ && before.charCodeAt(before.length - 1 - q) === after.charCodeAt(after.length - 1 - q)) q++;
+            REC.edits.push([nowMs(), ++recSeq, id, p, before.length - p - q, after.slice(p, after.length - q),
+                            (pend && pend.type) || e.inputType || '', after.length]);
+        } catch (err) { /* ignore */ }
+    }, true);
+
+    document.addEventListener('selectionchange', () => {
+        if (!recOn()) return;
+        const t = nowMs(); if (t - recLastCaret < 100) return; recLastCaret = t;
+        try {
+            const el = document.activeElement;
+            if (recIsText(el)) {
+                REC.carets.push([t, recField(el), el.selectionStart, el.selectionEnd, (el.selectionEnd || 0) - (el.selectionStart || 0)]);
+            } else {
+                const sel = window.getSelection ? window.getSelection() : null;
+                const len = sel ? String(sel).length : 0;
+                if (len > 0) REC.carets.push([t, 'page:' + recField(sel.anchorNode && sel.anchorNode.parentElement), null, null, len]);
+            }
+        } catch (err) { /* ignore */ }
+    });
+    document.addEventListener('focusin', e => { if (recOn()) REC.focus.push([nowMs(), 'in', recField(e.target)]); }, true);
+    document.addEventListener('focusout', e => { if (recOn()) REC.focus.push([nowMs(), 'out', recField(e.target)]); }, true);
+
+    document.addEventListener('mousemove', e => {
+        if (!recOn()) return;
+        const t = nowMs(); if (t - recLastMouse < 50) return; recLastMouse = t;
+        REC.mouse.push([t, e.clientX, e.clientY, Math.round(window.scrollX), Math.round(window.scrollY)]);
+    }, { passive: true, capture: true });
+    document.documentElement.addEventListener('mouseleave', () => { if (recOn()) REC.mouse.push([nowMs(), -1, -1, Math.round(window.scrollX), Math.round(window.scrollY)]); });
+    ['mousedown', 'mouseup', 'click', 'dblclick', 'contextmenu'].forEach(type => {
+        document.addEventListener(type, e => {
+            if (recOn()) REC.clicks.push([nowMs(), type, e.clientX, e.clientY, e.button, recField(e.target)]);
+        }, { passive: true, capture: true });
+    });
+    ['touchstart', 'touchend'].forEach(type => {
+        document.addEventListener(type, e => {
+            if (!recOn()) return;
+            const tp = (e.changedTouches && e.changedTouches[0]) || {};
+            REC.clicks.push([nowMs(), type, Math.round(tp.clientX || 0), Math.round(tp.clientY || 0), -1, recField(e.target)]);
+        }, { passive: true, capture: true });
+    });
+    document.addEventListener('scroll', e => {
+        if (!recOn()) return;
+        const el = (e.target === document || e.target === document.documentElement) ? null : e.target;
+        const id = el ? recField(el) : 'window';
+        const t = nowMs(); if (t - (recLastScroll[id] || 0) < 100) return; recLastScroll[id] = t;
+        REC.scrolls.push(el ? [t, id, Math.round(el.scrollTop), Math.round(el.scrollLeft)]
+                            : [t, 'window', Math.round(window.scrollY), Math.round(window.scrollX)]);
+    }, { passive: true, capture: true });
+
+    let recResizeTimer = null;
+    function recViewport(reason) {
+        if (!recOn()) return;
+        logUiEvent('viewport', { reason, w: window.innerWidth, h: window.innerHeight, dpr: window.devicePixelRatio || 1,
+                                 screen_w: (window.screen || {}).width || null, screen_h: (window.screen || {}).height || null });
+    }
+    window.addEventListener('resize', () => { clearTimeout(recResizeTimer); recResizeTimer = setTimeout(() => recViewport('resize'), 500); });
+
+    // Move buffered rows into the telemetry queue as batch events (called before every flush)
+    function drainRecording() {
+        Object.keys(REC).forEach(kind => {
+            const rows = REC[kind];
+            if (!rows.length) return;
+            REC[kind] = [];
+            for (let i = 0; i < rows.length; i += REC_MAX_ROWS) {
+                const part = rows.slice(i, i + REC_MAX_ROWS);
+                const entry = { event: 'rec_' + kind, at_ms: part[0][0],
+                                payload: { phase: currentPhase, cols: REC_COLS[kind], rows: part } };
+                if (lastVersionId) entry.version_id = lastVersionId;
+                telemetryQueue.push(entry);
+            }
+        });
+    }
+
     // =====================================================================================
     // Suspicious-behavior tracking and input provenance (paste / drop / typing anomalies)
     // =====================================================================================
     function enableSuspiciousBehaviorTracking() {
         if (suspiciousBehaviorTrackingEnabled) return;
         suspiciousBehaviorTrackingEnabled = true;
+        try { recViewport('start'); noteValueSet(essayEditor, 'tracking_start'); } catch (e) { /* ignore */ }
         logSuspiciousEvent('automation_fingerprint', {
             navigator_webdriver: !!navigator.webdriver,
             user_agent_length: navigator.userAgent ? navigator.userAgent.length : 0,
@@ -1042,6 +1214,19 @@ document.addEventListener('DOMContentLoaded', () => {
         wsBonusReminder.textContent = bonusOn ? (startData.bonus_rule_text || '') : '';
         wsBonusReminder.style.display = bonusOn ? '' : 'none';
         wordCountEl.textContent = `0 / ${mw} words`;
+        if (isPrefill()) {
+            document.getElementById('instr-task-intro').textContent = STUDY1_TEXT.taskIntro;
+            document.getElementById('instr-ws-left').textContent = STUDY1_TEXT.workspace;
+            document.getElementById('instr-ws-right').style.display = 'none';
+            document.getElementById('consent-purpose').textContent = STUDY1_TEXT.consentPurpose;
+            document.getElementById('consent-task-item').textContent = STUDY1_TEXT.consentTask(mw);
+            document.getElementById('consent-data-item').textContent = STUDY1_TEXT.consentData;
+            const debriefVaried = document.getElementById('debrief-varied');
+            debriefVaried.textContent = debriefVaried.textContent.replace(' The assigned writing assistant also varied.', '');
+            document.querySelector('.chat-pane').style.display = 'none';
+            document.querySelector('.workspace-grid').classList.add('single');
+            essayEditor.placeholder = '';
+        }
     }
 
     function resumeSession(saved) {
@@ -1070,6 +1255,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         populateStaticTexts();
         essayEditor.value = saved.essayDraft || '';
+        noteValueSet(essayEditor, 'resume');
         essayProvenanceTracker.syncValue();
         renderChat();
         updateWordCount();
@@ -1165,12 +1351,12 @@ About this Study
 You are being asked to participate in a research study. This form gives you information about the study.
 
 Purpose of Research
-This research examines how people write with AI writing assistants and how they judge whether a piece of writing looks human-written.
+${isPrefill() ? STUDY1_TEXT.consentPurpose : 'This research examines how people write with AI writing assistants and how they judge whether a piece of writing looks human-written.'}
 
 What You Will Be Asked to Do
 If you agree to participate, you will:
 - Answer a few short questions about what makes writing look AI-generated to you
-- Produce a short personal statement (at least ${minWords()} words) using an AI writing assistant that we assign to you. The assistant writes the text; you direct it, ask for revisions, and may make small edits to its wording
+- ${isPrefill() ? STUDY1_TEXT.consentTask(minWords()) : `Produce a short personal statement (at least ${minWords()} words) using an AI writing assistant that we assign to you. The assistant writes the text; you direct it, ask for revisions, and may make small edits to its wording`}
 - Each time you finish a change, rate how likely a person and an AI detector would be to judge the statement as human-written, and decide whether to keep editing or to submit
 - Have your submitted statement scored by an AI-detection service
 - Answer short questions about the task, then complete a brief demographic questionnaire
@@ -1193,7 +1379,7 @@ Compensation
 
 Confidentiality
 - Your responses will be stored securely
-- The text you write and your messages to the assistant are sent to the assistant's provider and to AI-detection services for scoring. Your Prolific ID is never sent to these services
+- ${isPrefill() ? STUDY1_TEXT.consentData : "The text you write and your messages to the assistant are sent to the assistant's provider and to AI-detection services for scoring. Your Prolific ID is never sent to these services"}
 - Data will be analyzed without any identifying information
 - Only researchers will have access to the data
 - Anonymized results derived from your data may be shared in scientific databases for transparency of our research process
@@ -1486,7 +1672,14 @@ By clicking "I agree", you indicated that:
         essayWorkingDiv.style.display = 'none';
         renderChat();
         updateWordCount();
-        showMainPhase('workspace'); notifyWorkspaceOpen();
+        showMainPhase('workspace');
+        if (isPrefill() && versions.length === 0) {
+            if (timeExpired || workspaceLocked) { lockWorkspace(); if (!isSubmitted) handleTimeExpired('resume'); return; }
+            startWorkspaceTimer();
+            loadPrefillDraft();
+            return;
+        }
+        notifyWorkspaceOpen();
         if (timeExpired || workspaceLocked) {
             lockWorkspace();
             if (!isSubmitted) handleTimeExpired('resume');
@@ -1629,6 +1822,7 @@ By clicking "I agree", you indicated that:
             logUiEvent('prompt_input_provenance', provenance);
             addChatMessage('user', text);
             promptInput.value = '';
+            noteValueSet(promptInput, 'prompt_sent');
             promptProvenanceTracker.reset();
         }
 
@@ -1689,6 +1883,7 @@ By clicking "I agree", you indicated that:
             const result = await apiPost(`/api/session/${sessionToken}/apply`, { prompt_id: msg.prompt_id });
             const appliedText = (msg.text || '').trim();
             essayEditor.value = appliedText;
+            noteValueSet(essayEditor, 'apply_reply');
             essayProvenanceTracker.reset();
             essayProvenanceTracker.syncValue();
             msg.applied = true;
@@ -1730,6 +1925,7 @@ By clicking "I agree", you indicated that:
     function seedEditorFromReply(msg) {
         if (workspaceLocked || timeExpired || isSubmitted) return;
         essayEditor.value = (msg.text || '').trim();
+        noteValueSet(essayEditor, 'reply_to_editor');
         essayProvenanceTracker.syncValue();
         editorSeedPromptId = msg.prompt_id;
         logUiEvent('reply_seeded_into_editor', { prompt_id: msg.prompt_id, words: countWords(essayEditor.value) });
@@ -1814,13 +2010,14 @@ By clicking "I agree", you indicated that:
         if (essayBusy || workspaceLocked || timeExpired || isSubmitted) return;
         const text = essayEditor.value;
         if (!text.trim()) return;
-        const ok = window.confirm('Clear the editor and start over? Your last recorded version is kept on our side.');
+        const ok = window.confirm(isPrefill() ? STUDY1_TEXT.startOverConfirm : 'Clear the editor and start over? Your last recorded version is kept on our side.');
         logUiEvent('start_over_clicked', { confirmed: ok, chars_cleared: ok ? text.length : 0, words_cleared: ok ? countWords(text) : 0 });
         if (!ok) return;
-        essayEditor.value = '';
+        essayEditor.value = isPrefill() ? (startData.prefill_text || '') : '';
+        noteValueSet(essayEditor, 'start_over');
         essayProvenanceTracker.reset();
         essayProvenanceTracker.syncValue();
-        pendingSource = 'regenerate';
+        pendingSource = isPrefill() ? 'reset' : 'regenerate';
         editorSeedPromptId = null;
         hideInlineError(essayErrorDiv);
         updateWordCount();
@@ -1830,7 +2027,7 @@ By clicking "I agree", you indicated that:
 
     // The statement must come from the assistant: until one reply has been applied, the editor,
     // Done and Start over stay locked (the backend enforces the same rule: error assistant_first).
-    function hasAssistantDraft() { return versions.some(v => v.source === 'llm_apply'); }
+    function hasAssistantDraft() { return isPrefill() || versions.some(v => v.source === 'llm_apply'); }
     function syncEditorLock() {
         essayEditor.readOnly = workspaceLocked || timeExpired || isSubmitted || essayBusy || !hasAssistantDraft();
     }
@@ -1961,6 +2158,8 @@ By clicking "I agree", you indicated that:
         ratingHeading.textContent = `Rate version ${Number(version.seq) + 1}`;
         ratingVersionInfo.textContent = `Version ${Number(version.seq) + 1} · ${version.word_count} words · ${describeSource(version.source)}`;
         ratingEssayPreview.textContent = version.text || '';
+        const previewDetails = ratingEssayPreview.closest('details');
+        if (previewDetails) previewDetails.open = (version.source === 'prefill');
 
         renderDetectorPanel(version);
 
@@ -1978,6 +2177,8 @@ By clicking "I agree", you indicated that:
     function describeSource(source) {
         if (source === 'llm_apply') return 'assistant reply used as-is';
         if (source === 'regenerate') return 'written after starting over';
+        if (source === 'prefill') return 'the original statement';
+        if (source === 'reset') return 'back to the original statement';
         return 'edited by you';
     }
 
@@ -2401,6 +2602,38 @@ By clicking "I agree", you indicated that:
     // Final page: debrief + GET /api/session/{tok}/complete + redirect to Prolific
     // =====================================================================================
 
+    // Study 1: the server records the fixed AI draft as the first version; the participant rates it first.
+    async function loadPrefillDraft() {
+        workspaceOpenSent = true;
+        essayBusy = true;
+        essayEditor.readOnly = true;
+        essayEditor.value = startData.prefill_text || '';
+        noteValueSet(essayEditor, 'draft_loading');
+        essayWorkingDiv.textContent = 'Loading the statement...';
+        essayWorkingDiv.style.display = 'block';
+        hideInlineError(essayErrorDiv);
+        updateDoneButtonState();
+        try {
+            const result = await apiPost(`/api/session/${sessionToken}/workspace_open`, {});
+            const v = result.version;
+            essayEditor.value = v.text;
+            noteValueSet(essayEditor, 'draft_loaded');
+            const version = recordVersion(v, 'prefill', v.text, null);
+            essayProvenanceTracker.reset();
+            essayProvenanceTracker.syncValue();
+            finishEssayBusy();
+            updateWordCount();
+            openRatingScreen(version, 'normal');
+        } catch (error) {
+            workspaceOpenSent = false;
+            finishEssayBusy();
+            logUiEvent('prefill_load_failed', { code: error.code || null, message: error.message });
+            if (error.code === 'already_submitted') { recoverSubmitted(); return; }
+            if (error.code === 'unknown_session') { handleUnknownSession(); return; }
+            showInlineError(essayErrorDiv, 'The statement could not be loaded. Please try again.', 'Try again', () => loadPrefillDraft());
+        }
+    }
+
     // Tell the server the workspace is on screen so its time-cap clock matches the page timer.
     let workspaceOpenSent = false;
     function notifyWorkspaceOpen() {
@@ -2493,7 +2726,7 @@ Purpose of the Research
 This study examines how people revise AI-assisted writing when it needs to pass as human-written, and when they decide that the writing is good enough to stop. We record each version of the statement, the detector's verdict on it, your two ratings, and your decision to keep editing or to submit.
 
 What Varied Between Participants
-Participants were randomly assigned to different stated purposes for the statement${hasBonus() ? ' and different bonus amounts' : ''}. Some participants saw the detector's verdict after every change; others saw it only at the end. The assigned writing assistant also varied. Everyone wrote the same kind of statement.
+Participants were randomly assigned to different stated purposes for the statement${hasBonus() ? ' and different bonus amounts' : ''}. Some participants saw the detector's verdict after every change; others saw it only at the end.${isPrefill() ? '' : ' The assigned writing assistant also varied.'} Everyone wrote the same kind of statement.
 
 The stated purpose was a scenario for the writing task. Your statement was not sent to any employer, committee, or blog. It was scored only by AI-detection services for this study.
 
