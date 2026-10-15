@@ -889,3 +889,8 @@ button > * {
 
 /* The writing task itself is bold on the instructions page */
 #instr-topic-text { font-weight: 700; }
+
+/* Study 1: no chat pane, the editor takes the full width */
+.workspace-grid.single {
+    grid-template-columns: 1fr;
+}
