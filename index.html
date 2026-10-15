@@ -1,45 +1,57 @@
-
 <!DOCTYPE html>
 <html lang="en">
     <head>
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>Interaction Study</title>
+        <title>Writing Study</title>
         <link rel="stylesheet" href="static/style.css">
         <link rel="icon" href="data:;base64,iVBORw0KGgo=">
+        <!-- jsPDF was already a dependency of the previous site; used only for the optional consent/debrief download. -->
         <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
      </head>
 <body>
-    <!-- Timer Display - Top Right -->
-    <div id="timer-display" style="position: fixed; top: 20px; right: 20px; background: rgba(0,0,0,0.8); color: white; padding: 10px 15px; border-radius: 5px; font-family: monospace; font-size: 16px; z-index: 1000; display: none;">
-        Time: <span id="countdown-timer">07:30</span>
+    <!-- Timer Display - Top Right (writing time cap) -->
+    <div id="timer-display" style="display: none;">
+        Time left: <span id="countdown-timer">15:00</span>
     </div>
 
     <div class="container">
 
-        <!-- NEW: Consent Form Section (Role-Specific) -->
+        <!-- Phase 0: Session setup (POST /api/session/start) -->
+        <div id="loading-phase" class="study-phase" style="display: none;">
+            <h2>Writing Study</h2>
+            <div id="loading-row" class="loading-message">
+                <div class="loading-spinner"></div>
+                <span id="loading-text">Setting up your session. One moment.</span>
+            </div>
+            <div id="start-error" class="inline-error" style="display: none;"></div>
+            <div style="text-align: center;">
+                <button id="start-retry-button" style="display: none;">Try again</button>
+            </div>
+        </div>
+
+        <!-- Phase 1: Consent -->
         <div id="consent-phase" class="study-phase" style="display: none;">
-            <!-- INTERROGATOR CONSENT FORM -->
-            <div id="consent-content-interrogator" style="display: none;">
+            <div id="consent-content">
                  <h2 style="text-align: center;">Consent to Participate in Research</h2>
                  <p style="text-align: center;">Principal Investigator: Nykko Vitali (nvitali@fas.harvard.edu)<br>Faculty Sponsor: Jason Mitchell</p>
 
                  <h4>About this Study</h4>
-                 <p>You are being asked to participate in a research study. This form provides you with information about the study.</p>
+                 <p>You are being asked to participate in a research study. This form gives you information about the study.</p>
 
                  <h4>Purpose of Research</h4>
-                 <p>This research examines how people evaluate text-based conversations and how these judgments change over time.</p>
+                 <p id="consent-purpose">This research examines how people write with AI writing assistants and how they judge whether a piece of writing looks human-written.</p>
 
                  <h4>What You Will Be Asked to Do</h4>
                  <p>If you agree to participate, you will:</p>
                  <ul>
-                     <li>Engage in a text-based conversation with another person or with a Large Language Model (such as ChatGPT)</li>
-                     <li>Determine if you're talking to a human or an AI each turn</li>
-                     <li>Rate your confidence in that guess on a sliding scale (0% = completely guessing, 100% = completely certain)</li>
-                     <li>Provide a comment about your experience at the end of the conversation</li>
-                     <li>Complete a brief demographic questionnaire at the end</li>
-                     <li>The total time commitment will be approximately 15 minutes</li>
-                     <li>You are free to share information as you see fit during the conversation but should not share more than you would be willing to share with a stranger</li>
+                     <li>Answer a few short questions about what makes writing look AI-generated to you</li>
+                     <li id="consent-task-item">Produce a short personal statement (at least <span class="consent-min-words">250</span> words) using an AI writing assistant that we assign to you. The assistant writes the text; you direct it, ask for revisions, and may make small edits to its wording</li>
+                     <li>Each time you finish a change, rate how likely a person and an AI detector would be to judge the statement as human-written, and decide whether to keep editing or to submit</li>
+                     <li>Have your submitted statement scored by an AI-detection service</li>
+                     <li>Answer short questions about the task, then complete a brief demographic questionnaire</li>
+                     <li>The writing part has a time limit of <span class="consent-time-cap">15</span> minutes. The total time commitment is approximately 20 minutes</li>
+                     <li>Please do not include information that could identify you or another person in the statement or in your messages</li>
                  </ul>
 
                  <h4>Your Rights as a Participant</h4>
@@ -47,31 +59,29 @@
                      <li>Your participation is voluntary.</li>
                      <li>You may stop at any time.</li>
                      <li>You may choose not to answer any question.</li>
-                     <li>You may not be told everything about the purpose of this research study initially, but you will be fully informed after completion.</li>
                  </ul>
 
                  <h4>Risks and Benefits</h4>
                  <ul>
-                     <li>You may be matched with a human participant, and due to the unpredictable nature of online conversations your conversational partner may use language you consider offensive</li>
-                     <li>While there are no direct benefits to you, your participation helps advance our understanding of human-AI interaction and judgment processes</li>
+                     <li>There are no known risks beyond those of everyday computer use</li>
+                     <li>While there are no direct benefits to you, your participation helps advance our understanding of how people work with AI writing tools</li>
                  </ul>
 
                  <h4>Compensation</h4>
                  <ul>
-                    <li>You will receive compensation equivalent to $8.00 per hour for your participation through the online platform</li>
-                    <li>You will be compensated for your time spent on the study if you leave as a result of your partner saying something offensive during the course of the conversation</li>
-                    <li>You will be compensated for your time spent on the study if your partner leaves early for any reason</li>
+                    <li>You will receive the base payment listed on Prolific for your participation</li>
+                    <li>Some participants are offered a bonus that depends on how the AI-detection service rates their final statement. Whether you are offered a bonus, its amount, and the rule for earning it are shown to you in plain words before you start writing</li>
+                    <li>Any bonus is paid through Prolific after the study closes</li>
                  </ul>
 
                  <h4>Confidentiality</h4>
                  <ul>
                     <li>Your responses will be stored securely</li>
-                    <li>If you are matched with an AI, conversations are processed under Harvard's institutional agreement; your responses will not be used to train AI models</li>
+                    <li id="consent-data-item">The statement text and your messages to the assistant are sent to the assistant's provider and to AI-detection services for scoring. Your Prolific ID is never sent to these services</li>
                     <li>Data will be analyzed without any identifying information</li>
                     <li>Only researchers will have access to the data</li>
                     <li>Anonymized results derived from your data may be shared in scientific databases for transparency of our research process</li>
-                    <li>Any personally identifying information you may share during conversations will be removed from analyses and will not be used in research outputs</li>
-                    <li>Analyses (quantitative and qualitative) will be carried out on any text you write during the study</li>
+                    <li>Any personally identifying information that appears in the statement or messages will be removed from analyses and will not be used in research outputs</li>
                  </ul>
 
                  <h4>Questions or Concerns?</h4>
@@ -90,74 +100,7 @@
                  </ul>
             </div>
 
-            <!-- WITNESS CONSENT FORM -->
-            <div id="consent-content-witness" style="display: none;">
-                 <h2 style="text-align: center;">Consent to Participate in Research</h2>
-                 <p style="text-align: center;">Principal Investigator: Nykko Vitali (nvitali@fas.harvard.edu)<br>Faculty Sponsor: Jason Mitchell</p>
-
-                 <h4>About this Study</h4>
-                 <p>You are being asked to participate in a research study. This form provides you with information about the study.</p>
-
-                 <h4>Purpose of Research</h4>
-                 <p>This research examines how people evaluate text-based conversations and how these judgments change over time.</p>
-
-                 <h4>What You Will Be Asked to Do</h4>
-                 <p>If you agree to participate, you will:</p>
-                 <ul>
-                     <li>Engage in a text-based conversation with another person</li>
-                     <li>Emulate an assigned conversation style throughout your conversation</li>
-                     <li>Provide a comment about your experience at the end of the conversation</li>
-                     <li>Complete a brief demographic questionnaire at the end</li>
-                     <li>The total time commitment will be approximately 15 minutes</li>
-                     <li>You are free to share information as you see fit during the conversation but should not share more than you would be willing to share with a stranger</li>
-                 </ul>
-
-                 <h4>Your Rights as a Participant</h4>
-                 <ul>
-                     <li>Your participation is voluntary.</li>
-                     <li>You may stop at any time.</li>
-                     <li>You may choose not to answer any question.</li>
-                     <li>You may not be told everything about the purpose of this research study initially, but you will be fully informed after completion.</li>
-                 </ul>
-
-                 <h4>Risks and Benefits</h4>
-                 <ul>
-                     <li>You will be matched with a participant, and due to the unpredictable nature of online conversations your conversational partner may use language you consider offensive</li>
-                     <li>While there are no direct benefits to you, your participation helps advance our understanding of human interaction and judgment processes</li>
-                 </ul>
-
-                 <h4>Compensation</h4>
-                 <ul>
-                    <li>You will receive compensation equivalent to $8.00 per hour for your participation through the online platform</li>
-                    <li>You will be compensated for your time spent on the study if you leave as a result of your partner saying something offensive during the course of the conversation</li>
-                    <li>You will be compensated for your time spent on the study if your partner leaves early for any reason</li>
-                 </ul>
-
-                 <h4>Confidentiality</h4>
-                 <ul>
-                    <li>Your responses will be stored securely</li>
-                    <li>Data will be analyzed without any identifying information</li>
-                    <li>Only researchers will have access to the data</li>
-                    <li>Anonymized results derived from your data may be shared in scientific databases for transparency of our research process</li>
-                    <li>Any personally identifying information you may share during conversations will be removed from analyses and will not be used in research outputs</li>
-                    <li>Analyses (quantitative and qualitative) will be carried out on any text you write during the study</li>
-                 </ul>
-
-                 <h4>Questions or Concerns?</h4>
-                 <ul>
-                    <li>For questions about the research: Contact the Principal Investigator at nvitali@fas.harvard.edu</li>
-                    <li>For questions about your rights as a participant: Contact cuhs@harvard.edu</li>
-                 </ul>
-
-                 <h4>Agreement to Participate</h4>
-                 <p>By clicking "I agree" below, you indicate that:</p>
-                 <ul>
-                    <li>You are at least 18 years old.</li>
-                    <li>You have read and understood this consent form.</li>
-                    <li>You voluntarily agree to participate.</li>
-                    <li>You understand you can withdraw at any time.</li>
-                 </ul>
-            </div>
+            <div id="consent-error" class="inline-error" style="display: none;"></div>
 
             <div id="consent-actions">
                  <button id="agree-button">I agree to participate</button>
@@ -171,107 +114,374 @@
             </div>
         </div>
 
+        <!-- Phase 2: Cue elicitation (POST /cues) -->
+        <div id="cues-phase" class="study-phase" style="display: none;">
+            <p>We would like to know what you look for when you decide whether a piece of writing was produced by an AI. There are no right or wrong answers.</p>
 
+            <form id="cues-form" class="study-form">
+                <label for="cues-free-text">What makes writing look AI-generated to you? Write down as many tells as you can think of that you personally notice.</label>
+                <textarea id="cues-free-text" name="free_text" rows="5" placeholder="Your answer..."></textarea>
+
+                <p class="form-section-note">For each feature below, rate how strongly it signals to you that a text was written by an AI. 1 = not a signal at all, 7 = a very strong signal.</p>
+
+                <label>Overly formal tone</label>
+                <div class="likert-bubble-group likert-7">
+                    <button type="button" class="likert-bubble" data-name="overly_formal" data-value="1">1</button>
+                    <button type="button" class="likert-bubble" data-name="overly_formal" data-value="2">2</button>
+                    <button type="button" class="likert-bubble" data-name="overly_formal" data-value="3">3</button>
+                    <button type="button" class="likert-bubble" data-name="overly_formal" data-value="4">4</button>
+                    <button type="button" class="likert-bubble" data-name="overly_formal" data-value="5">5</button>
+                    <button type="button" class="likert-bubble" data-name="overly_formal" data-value="6">6</button>
+                    <button type="button" class="likert-bubble" data-name="overly_formal" data-value="7">7</button>
+                </div>
+                <input type="hidden" name="overly_formal" value="">
+
+                <label>Em dashes (the long dash, like this &mdash; between words)</label>
+                <div class="likert-bubble-group likert-7">
+                    <button type="button" class="likert-bubble" data-name="em_dashes" data-value="1">1</button>
+                    <button type="button" class="likert-bubble" data-name="em_dashes" data-value="2">2</button>
+                    <button type="button" class="likert-bubble" data-name="em_dashes" data-value="3">3</button>
+                    <button type="button" class="likert-bubble" data-name="em_dashes" data-value="4">4</button>
+                    <button type="button" class="likert-bubble" data-name="em_dashes" data-value="5">5</button>
+                    <button type="button" class="likert-bubble" data-name="em_dashes" data-value="6">6</button>
+                    <button type="button" class="likert-bubble" data-name="em_dashes" data-value="7">7</button>
+                </div>
+                <input type="hidden" name="em_dashes" value="">
+
+                <label>Repetitive sentence structure</label>
+                <div class="likert-bubble-group likert-7">
+                    <button type="button" class="likert-bubble" data-name="repetitive_structure" data-value="1">1</button>
+                    <button type="button" class="likert-bubble" data-name="repetitive_structure" data-value="2">2</button>
+                    <button type="button" class="likert-bubble" data-name="repetitive_structure" data-value="3">3</button>
+                    <button type="button" class="likert-bubble" data-name="repetitive_structure" data-value="4">4</button>
+                    <button type="button" class="likert-bubble" data-name="repetitive_structure" data-value="5">5</button>
+                    <button type="button" class="likert-bubble" data-name="repetitive_structure" data-value="6">6</button>
+                    <button type="button" class="likert-bubble" data-name="repetitive_structure" data-value="7">7</button>
+                </div>
+                <input type="hidden" name="repetitive_structure" value="">
+
+                <label>Excessive transitions ("Moreover", "Furthermore", "In conclusion")</label>
+                <div class="likert-bubble-group likert-7">
+                    <button type="button" class="likert-bubble" data-name="excessive_transitions" data-value="1">1</button>
+                    <button type="button" class="likert-bubble" data-name="excessive_transitions" data-value="2">2</button>
+                    <button type="button" class="likert-bubble" data-name="excessive_transitions" data-value="3">3</button>
+                    <button type="button" class="likert-bubble" data-name="excessive_transitions" data-value="4">4</button>
+                    <button type="button" class="likert-bubble" data-name="excessive_transitions" data-value="5">5</button>
+                    <button type="button" class="likert-bubble" data-name="excessive_transitions" data-value="6">6</button>
+                    <button type="button" class="likert-bubble" data-name="excessive_transitions" data-value="7">7</button>
+                </div>
+                <input type="hidden" name="excessive_transitions" value="">
+
+                <label>Generic examples</label>
+                <div class="likert-bubble-group likert-7">
+                    <button type="button" class="likert-bubble" data-name="generic_examples" data-value="1">1</button>
+                    <button type="button" class="likert-bubble" data-name="generic_examples" data-value="2">2</button>
+                    <button type="button" class="likert-bubble" data-name="generic_examples" data-value="3">3</button>
+                    <button type="button" class="likert-bubble" data-name="generic_examples" data-value="4">4</button>
+                    <button type="button" class="likert-bubble" data-name="generic_examples" data-value="5">5</button>
+                    <button type="button" class="likert-bubble" data-name="generic_examples" data-value="6">6</button>
+                    <button type="button" class="likert-bubble" data-name="generic_examples" data-value="7">7</button>
+                </div>
+                <input type="hidden" name="generic_examples" value="">
+
+                <label>No personal detail</label>
+                <div class="likert-bubble-group likert-7">
+                    <button type="button" class="likert-bubble" data-name="no_personal_detail" data-value="1">1</button>
+                    <button type="button" class="likert-bubble" data-name="no_personal_detail" data-value="2">2</button>
+                    <button type="button" class="likert-bubble" data-name="no_personal_detail" data-value="3">3</button>
+                    <button type="button" class="likert-bubble" data-name="no_personal_detail" data-value="4">4</button>
+                    <button type="button" class="likert-bubble" data-name="no_personal_detail" data-value="5">5</button>
+                    <button type="button" class="likert-bubble" data-name="no_personal_detail" data-value="6">6</button>
+                    <button type="button" class="likert-bubble" data-name="no_personal_detail" data-value="7">7</button>
+                </div>
+                <input type="hidden" name="no_personal_detail" value="">
+
+                <label>Too-polished grammar</label>
+                <div class="likert-bubble-group likert-7">
+                    <button type="button" class="likert-bubble" data-name="polished_grammar" data-value="1">1</button>
+                    <button type="button" class="likert-bubble" data-name="polished_grammar" data-value="2">2</button>
+                    <button type="button" class="likert-bubble" data-name="polished_grammar" data-value="3">3</button>
+                    <button type="button" class="likert-bubble" data-name="polished_grammar" data-value="4">4</button>
+                    <button type="button" class="likert-bubble" data-name="polished_grammar" data-value="5">5</button>
+                    <button type="button" class="likert-bubble" data-name="polished_grammar" data-value="6">6</button>
+                    <button type="button" class="likert-bubble" data-name="polished_grammar" data-value="7">7</button>
+                </div>
+                <input type="hidden" name="polished_grammar" value="">
+
+                <label>Certain vocabulary (words like "delve", "tapestry", "testament")</label>
+                <div class="likert-bubble-group likert-7">
+                    <button type="button" class="likert-bubble" data-name="certain_vocabulary" data-value="1">1</button>
+                    <button type="button" class="likert-bubble" data-name="certain_vocabulary" data-value="2">2</button>
+                    <button type="button" class="likert-bubble" data-name="certain_vocabulary" data-value="3">3</button>
+                    <button type="button" class="likert-bubble" data-name="certain_vocabulary" data-value="4">4</button>
+                    <button type="button" class="likert-bubble" data-name="certain_vocabulary" data-value="5">5</button>
+                    <button type="button" class="likert-bubble" data-name="certain_vocabulary" data-value="6">6</button>
+                    <button type="button" class="likert-bubble" data-name="certain_vocabulary" data-value="7">7</button>
+                </div>
+                <input type="hidden" name="certain_vocabulary" value="">
+
+                <label>Predictable paragraph structure</label>
+                <div class="likert-bubble-group likert-7">
+                    <button type="button" class="likert-bubble" data-name="predictable_paragraphs" data-value="1">1</button>
+                    <button type="button" class="likert-bubble" data-name="predictable_paragraphs" data-value="2">2</button>
+                    <button type="button" class="likert-bubble" data-name="predictable_paragraphs" data-value="3">3</button>
+                    <button type="button" class="likert-bubble" data-name="predictable_paragraphs" data-value="4">4</button>
+                    <button type="button" class="likert-bubble" data-name="predictable_paragraphs" data-value="5">5</button>
+                    <button type="button" class="likert-bubble" data-name="predictable_paragraphs" data-value="6">6</button>
+                    <button type="button" class="likert-bubble" data-name="predictable_paragraphs" data-value="7">7</button>
+                </div>
+                <input type="hidden" name="predictable_paragraphs" value="">
+
+                <label for="cues-other-text">Anything else you look for? (optional)</label>
+                <input type="text" id="cues-other-text" name="other_text" placeholder="Optional">
+
+                <button type="submit" id="cues-submit-button">Continue</button>
+            </form>
+            <div id="cues-loading" class="loading-message" style="display: none;">Saving your answers...</div>
+        </div>
+
+        <!-- Phase 3: Instructions (paginated) + comprehension check -->
         <div id="instructions-phase" class="study-phase" style="display: none;">
-            <h2>Welcome to the Interaction Study</h2>
+            <h2>Instructions</h2>
 
-            <!-- PAGINATED INSTRUCTIONS CONTAINER -->
             <div id="instructions-pagination-container">
 
-                <!-- Page 1: Big Picture -->
+                <!-- Page 1: The task -->
                 <div class="instruction-page" id="instruction-page-1" style="display: block;">
-                    <!-- INTERROGATOR PAGE 1 -->
-                    <div class="instruction-content interrogator-content" style="display: none;">
-                        <h3>The Big Picture</h3>
-                        <p>
-                            In this study, you'll be having a conversation. <strong>Your task is to determine whether you're talking to an AI or a human.</strong>
-                        </p>
-                        <p>
-                            Please assume AI means Large Language Model (LLM), such as ChatGPT.
-                        </p>
-                        <p>
-                            <strong><em>You are free to share information as you see fit during the conversation but should not share more than you would be willing to share with a stranger.</em></strong>
-                        </p>
-                    </div>
-                    <!-- WITNESS PAGE 1 -->
-                    <div class="instruction-content witness-content" style="display: none;">
-                        <h3>The Big Picture</h3>
-                        <p>
-                            We're interested in how conversational styles impact online conversations. We'd like you to adopt a particular style here to test how this influences people's perception when they're in situations of uncertainty.
-                        </p>
-                        <p>
-                            <strong><em>You are free to share information as you see fit during the conversation but should not share more than you would be willing to share with a stranger.</em></strong>
-                        </p>
+                    <div class="instruction-content">
+                        <h3>Your Writing Task</h3>
+                        <p id="instr-task-intro">You will be asked to do a writing task with the help of an LLM. All tasks are around 250 words. The goal is for the passage to sound as human as possible before moving on.</p>
+                        <p id="instr-topic-text" class="key-instructions"></p>
+                        <p><strong>Purpose of the statement:</strong></p>
+                        <p id="instr-purpose-text" class="purpose-box"></p>
                     </div>
                 </div>
 
-                <!-- Page 2: Specifics -->
+                <!-- Page 2: The workspace (the two panes) -->
                 <div class="instruction-page" id="instruction-page-2" style="display: none;">
-                    <!-- INTERROGATOR PAGE 2 -->
-                    <div class="instruction-content interrogator-content" style="display: none;">
-                        <h3>How It Works</h3>
-                        <p>
-                            After each message, you'll decide whether you think your partner is human or AI, and how confident you are in that decision.
-                        </p>
-                    </div>
-                    <!-- WITNESS PAGE 2 -->
-                    <div class="instruction-content witness-content" style="display: none;">
-                        <h3>How It Works</h3>
-                        <p>
-                            The conversation style we'd like you to use is <strong><span id="pre-demo-style-name"></span></strong>.
-                        </p>
-                        <p>
-                            <span id="pre-demo-style-description"></span>
-                        </p>
+                    <div class="instruction-content">
+                        <h3>How the Workspace Works</h3>
+                        <p id="instr-ws-left">On the <strong>LEFT</strong> will be a chat with your writing assistant. The assistant is powered by an LLM. For the task, you can ask it to write a draft, revise a draft, or answer any questions to aid you in completing the task.</p>
+                        <p id="instr-ws-right">On the <strong>RIGHT</strong> you will see the passage the assistant produces. Click <em>Use this as my statement</em> under an assistant reply to place it there. The statement must come from the assistant; once it is there you may ask the assistant for revisions or make small edits to its wording yourself.</p>
                     </div>
                 </div>
 
-                <!-- Page 3: Reiteration/Summary -->
+                <!-- Page 3: Finishing a change, the time limit -->
                 <div class="instruction-page" id="instruction-page-3" style="display: none;">
-                    <!-- INTERROGATOR PAGE 3 -->
-                    <div class="instruction-content interrogator-content" style="display: none;">
-                        <h3>Important</h3>
-                        <p>
-                            <strong><em>Consider what kinds of messages may clue you in to if your conversational partner is an AI or a human. Then, evaluate each message sent by your conversation partner as evidence towards your judgment for that turn.</em></strong>
-                        </p>
-                        <p>
-                            You can change your mind as many times as you want across turns. We're interested in how your impression evolves.
-                        </p>
-                        <p>
-                            You can talk about anything you would like to make your decision.
-                        </p>
+                    <div class="instruction-content">
+                        <h3>Finishing a Change</h3>
+                        <p>The statement must be at least <strong><span id="instr-min-words">250</span> words</strong>. A live word count is shown under the editor.</p>
+                        <p>When you finish a change, click <strong>Done with this change</strong>. You will then rate the statement on two sliders and choose to <strong>keep editing</strong> or <strong>submit</strong>. You can make as many changes as you like within the time limit.</p>
+                        <p>You have <strong><span id="instr-time-cap">15</span> minutes</strong> for the writing part. A timer is shown at the top right. When time runs out, your most recent finished version is submitted automatically.</p>
+                        <p><strong>Do not refresh the page</strong> during the task.</p>
                     </div>
-                    <!-- WITNESS PAGE 3 -->
-                    <div class="instruction-content witness-content" style="display: none;">
-                        <h3>Important</h3>
-                        <p>
-                            Try to keep up the <strong><span class="pre-demo-style-name-repeat"></span></strong> style for the entire conversation.
-                        </p>
-                        <p>
-                            We find many of our subjects wonder if they're interacting with an AI, so you may find that there are some questions about whether or not you're human. Feel free to respond to these questions in the style you've been assigned.
-                        </p>
-                        <p>
-                            If people ask if you're an AI, you may tell them you're not in the style you've been assigned.
-                        </p>
+                </div>
+
+                <!-- Page 4: The bonus rule -->
+                <div class="instruction-page" id="instruction-page-4" style="display: none;">
+                    <div class="instruction-content">
+                        <h3 id="instr-scoring-heading">Your Bonus Rule</h3>
+                        <p id="instr-bonus-rule-text" class="key-instructions bonus-box"></p>
+                        <p>Your submitted statement is scored by an AI-detection service. The detector gives one verdict: more likely written by a human, or more likely written by an AI.</p>
+                        <p id="instr-feedback-note"></p>
+                        <p id="instr-check-lead">Please read the rule above carefully. On the next page we ask two short questions about it.</p>
+                    </div>
+                </div>
+
+                <!-- Page 5: Comprehension check (adapted from the attention-check mechanics) -->
+                <div class="instruction-page" id="instruction-page-5" style="display: none;">
+                    <div class="instruction-content">
+                        <h3>Quick Check</h3>
+
+                        <p id="check-q1-text" class="check-question"></p>
+                        <div id="check-q1-options" class="check-options">
+                            <label class="check-option"><input type="radio" name="check-q1" value="0"><span id="check-q1-option-0"></span></label>
+                            <label class="check-option"><input type="radio" name="check-q1" value="1"><span id="check-q1-option-1"></span></label>
+                            <label class="check-option"><input type="radio" name="check-q1" value="2"><span id="check-q1-option-2"></span></label>
+                            <label class="check-option"><input type="radio" name="check-q1" value="3"><span id="check-q1-option-3"></span></label>
+                        </div>
+
+                        <p id="check-q2-text" class="check-question"></p>
+                        <div id="check-q2-options" class="check-options">
+                            <label class="check-option"><input type="radio" name="check-q2" value="0"><span id="check-q2-option-0"></span></label>
+                            <label class="check-option"><input type="radio" name="check-q2" value="1"><span id="check-q2-option-1"></span></label>
+                            <label class="check-option"><input type="radio" name="check-q2" value="2"><span id="check-q2-option-2"></span></label>
+                            <label class="check-option"><input type="radio" name="check-q2" value="3"><span id="check-q2-option-3"></span></label>
+                        </div>
+
+                        <p id="comprehension-check-error" class="inline-error" style="display: none;"></p>
                     </div>
                 </div>
 
                 <!-- Navigation -->
-                <div id="instruction-nav" style="display: flex; justify-content: space-between; align-items: center; margin-top: 20px;">
-                    <button type="button" id="instruction-prev-btn" style="padding: 10px 20px; font-size: 16px; cursor: pointer; visibility: hidden;">← Back</button>
-                    <span id="instruction-page-indicator" style="font-size: 14px; color: #666;">1 / 3</span>
-                    <button type="button" id="instruction-next-btn" style="padding: 10px 20px; font-size: 16px; cursor: pointer;">Next →</button>
+                <div id="instruction-nav">
+                    <button type="button" id="instruction-prev-btn" style="visibility: hidden;">&larr; Back</button>
+                    <span id="instruction-page-indicator">1 / 5</span>
+                    <button type="button" id="instruction-next-btn">Next &rarr;</button>
                 </div>
             </div>
 
-            <button id="confirm-instructions-button" style="display: none; margin-top: 15px;">I Understand, Continue</button>
+            <button id="confirm-instructions-button" style="display: none; margin-top: 15px;">Open the workspace</button>
         </div>
 
-    <div id="initial-setup" class="study-phase" style="display: none;">
+        <!-- Phase 4: Workspace (chat + editor) -->
+        <div id="workspace-phase" class="study-phase" style="display: none;">
+            <div id="workspace-task-reminder">
+                <p><strong>Task:</strong> <span id="ws-topic-text"></span></p>
+                <p><strong>Purpose:</strong> <span id="ws-purpose-text"></span></p>
+                <p id="ws-bonus-reminder" class="muted"></p>
+            </div>
+
+            <div id="time-up-banner" class="inline-notice" style="display: none;">Time is up. Please finish rating your statement.</div>
+
+            <div class="workspace-grid">
+                <!-- Left: chat with the assigned writing assistant -->
+                <div class="pane chat-pane">
+                    <h3>Your writing assistant</h3>
+                    <div class="chat-window">
+                        <div id="message-list"></div>
+                        <div id="assistant-working" style="display: none;">
+                            <div class="dot"></div>
+                            <div class="dot"></div>
+                            <div class="dot"></div>
+                        </div>
+                    </div>
+                    <div id="chat-error" class="inline-error" style="display: none;"></div>
+                    <div id="chat-input-container" class="chat-input-area">
+                        <textarea id="prompt-input" rows="3" placeholder="Ask the assistant to write or revise your statement..."></textarea>
+                        <button id="send-prompt-button">Send</button>
+                    </div>
+                    <p class="muted small">Your current statement is attached to every message.</p>
+                </div>
+
+                <!-- Right: statement editor -->
+                <div class="pane essay-pane">
+                    <h3>Your statement</h3>
+                    <textarea id="essay-editor" placeholder="The assistant's draft will appear here once you click 'Use this as my statement' under one of its replies."></textarea>
+                    <div class="essay-status-row">
+                        <span id="word-count" class="word-count short">0 / 250 words</span>
+                        <span id="word-count-status" class="muted small"></span>
+                    </div>
+                    <div id="essay-error" class="inline-error" style="display: none;"></div>
+                    <div id="essay-working" class="loading-message" style="display: none;">Saving this version...</div>
+                    <div class="essay-buttons">
+                        <button id="start-over-button" class="secondary-button">Start over</button>
+                        <button id="done-button" disabled>Done with this change</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Phase 5: Rating screen (after each version) -->
+        <div id="rating-phase" class="study-phase" style="display: none;">
+            <h2 id="rating-heading">Rate this version</h2>
+            <div id="timeout-notice" class="inline-notice" style="display: none;">
+                Time is up. Please rate this version. It will be submitted as your final statement.
+            </div>
+
+            <div id="detector-panel" class="detector-panel" style="display: none;">
+                <p class="detector-title">Detector verdict for this version</p>
+                <p id="detector-label" class="detector-label"></p>
+                <p id="detector-pass" class="detector-pass"></p>
+            </div>
+
+            <p id="rating-version-info" class="muted"></p>
+            <details class="essay-preview-details">
+                <summary>Show the text of this version</summary>
+                <pre id="rating-essay-preview" class="essay-preview"></pre>
+            </details>
+
+            <div id="assessment-area">
+                <div class="slider-block">
+                    <p class="slider-question"><strong>A person reading this would think a human wrote it.</strong></p>
+                    <label for="slider-human">How likely: <span id="slider-human-value" class="slider-value">&ndash;</span>%</label>
+                    <input type="range" id="slider-human" class="rating-slider pristine" min="0" max="100" step="1" value="50">
+                    <div class="slider-labels">
+                        <span class="label-left">0% (Very unlikely)</span>
+                        <span class="label-center">50%</span>
+                        <span class="label-right">100% (Very likely)</span>
+                    </div>
+                </div>
+
+                <div class="slider-block">
+                    <p class="slider-question"><strong>An AI detector would rate this as human-written.</strong></p>
+                    <label for="slider-detector">How likely: <span id="slider-detector-value" class="slider-value">&ndash;</span>%</label>
+                    <input type="range" id="slider-detector" class="rating-slider pristine" min="0" max="100" step="1" value="50">
+                    <div class="slider-labels">
+                        <span class="label-left">0% (Very unlikely)</span>
+                        <span class="label-center">50%</span>
+                        <span class="label-right">100% (Very likely)</span>
+                    </div>
+                </div>
+
+                <p id="rating-hint" class="muted small">Move both sliders to continue.</p>
+                <div id="rating-error" class="inline-error" style="display: none;"></div>
+                <div id="rating-loading" class="loading-message" style="display: none;">Saving...</div>
+
+                <div id="rating-buttons">
+                    <button id="keep-editing-button" class="secondary-button" disabled>Keep editing</button>
+                    <button id="submit-final-button" disabled>Submit as my final statement</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Phase 6: Result -->
+        <div id="result-phase" class="study-phase" style="display: none;">
+            <h2>Your Result</h2>
+            <div class="result-box">
+                <p id="result-verdict"></p>
+                <p id="result-passed"></p>
+                <p id="result-bonus"></p>
+                <p id="result-note" class="muted"></p>
+            </div>
+            <div style="text-align: center;">
+                <button id="result-continue-button">Continue</button>
+            </div>
+        </div>
+
+        <!-- Phase 7: Post-task questions (POST /post_survey) -->
+        <div id="post-survey-phase" class="study-phase" style="display: none;">
+            <h2>About the Task</h2>
+            <p>A few questions about what you just did.</p>
+
+            <form id="post-survey-form" class="study-form">
+                <label for="post-what-changed">What did you change in the statement, and why?</label>
+                <textarea id="post-what-changed" name="what_changed_text" rows="5" placeholder="Your answer..."></textarea>
+
+                <label for="post-most-helpful">Which edits do you think helped most to make it read as human-written?</label>
+                <textarea id="post-most-helpful" name="most_helpful_text" rows="4" placeholder="Your answer..."></textarea>
+
+                <label>How much did it matter to you that the statement passed the detector?</label>
+                <div class="likert-bubble-group likert-7">
+                    <button type="button" class="likert-bubble" data-name="manip_mattered" data-value="1">1</button>
+                    <button type="button" class="likert-bubble" data-name="manip_mattered" data-value="2">2</button>
+                    <button type="button" class="likert-bubble" data-name="manip_mattered" data-value="3">3</button>
+                    <button type="button" class="likert-bubble" data-name="manip_mattered" data-value="4">4</button>
+                    <button type="button" class="likert-bubble" data-name="manip_mattered" data-value="5">5</button>
+                    <button type="button" class="likert-bubble" data-name="manip_mattered" data-value="6">6</button>
+                    <button type="button" class="likert-bubble" data-name="manip_mattered" data-value="7">7</button>
+                </div>
+                <div class="slider-labels likert-endpoints">
+                    <span class="label-left">1 = Did not matter at all</span>
+                    <span class="label-right">7 = Mattered a great deal</span>
+                </div>
+                <input type="hidden" name="manip_mattered" value="">
+
+
+                <label for="post-recalled-purpose">What was the stated purpose of the statement?</label>
+                <input type="text" id="post-recalled-purpose" name="manip_recalled_purpose" placeholder="In your own words">
+
+                <button type="submit" id="post-survey-submit-button">Continue</button>
+            </form>
+            <div id="post-survey-loading" class="loading-message" style="display: none;">Saving your answers...</div>
+        </div>
+
+        <!-- Phase 8: Demographics (reused form; POST /demographics {answers}) -->
+        <div id="demographics-phase" class="study-phase" style="display: none;">
             <h2>Demographics Questionnaire</h2>
             <p>Before we conclude, please complete this brief questionnaire about your experiences with AI and some basic information about you.</p>
 
-            <form id="initial-form">
+            <form id="demographics-form" class="study-form">
                 <!-- AI Experience Section -->
                 <label>How often do you use AI chatbots (ChatGPT, Claude, Gemini, etc.)?</label>
                 <select name="ai_usage_frequency" required>
@@ -300,27 +510,34 @@
                     <label><input type="checkbox" name="ai_models_used" value="other"> Other</label>
                 </div>
 
-                <label>If you received a text from a number you didn't know, how quickly do you think you'd be able to tell if it was an AI or human?</label>
+                <label>How often do you use AI tools to help with your writing (emails, essays, applications, posts)?</label>
                 <div class="likert-bubble-group">
-                    <button type="button" class="likert-bubble" data-name="self_detection_speed" data-value="1">Immediately (1-2 msgs)</button>
-                    <button type="button" class="likert-bubble" data-name="self_detection_speed" data-value="2">Very quickly (3-5 msgs)</button>
-                    <button type="button" class="likert-bubble" data-name="self_detection_speed" data-value="3">Fairly quickly (6-10 msgs)</button>
-                    <button type="button" class="likert-bubble" data-name="self_detection_speed" data-value="4">After some convo (11-20 msgs)</button>
-                    <button type="button" class="likert-bubble" data-name="self_detection_speed" data-value="5">After extended convo (20+ msgs)</button>
-                    <button type="button" class="likert-bubble" data-name="self_detection_speed" data-value="6">Couldn't tell</button>
+                    <button type="button" class="likert-bubble" data-name="ai_writing_frequency" data-value="1">Never</button>
+                    <button type="button" class="likert-bubble" data-name="ai_writing_frequency" data-value="2">Rarely</button>
+                    <button type="button" class="likert-bubble" data-name="ai_writing_frequency" data-value="3">Sometimes</button>
+                    <button type="button" class="likert-bubble" data-name="ai_writing_frequency" data-value="4">Often</button>
+                    <button type="button" class="likert-bubble" data-name="ai_writing_frequency" data-value="5">Almost always</button>
                 </div>
-                <input type="hidden" name="self_detection_speed" value="">
+                <input type="hidden" name="ai_writing_frequency" value="">
 
-                <label>If the average person received a text message from an unknown number, how quickly do you think they'd be able to tell if it was sent by an AI or a human?</label>
+                <label>Before today, how familiar were you with AI-detection tools (tools that judge whether a text was written by an AI)?</label>
                 <div class="likert-bubble-group">
-                    <button type="button" class="likert-bubble" data-name="others_detection_speed" data-value="1">Immediately (1-2 msgs)</button>
-                    <button type="button" class="likert-bubble" data-name="others_detection_speed" data-value="2">Very quickly (3-5 msgs)</button>
-                    <button type="button" class="likert-bubble" data-name="others_detection_speed" data-value="3">Fairly quickly (6-10 msgs)</button>
-                    <button type="button" class="likert-bubble" data-name="others_detection_speed" data-value="4">After some convo (11-20 msgs)</button>
-                    <button type="button" class="likert-bubble" data-name="others_detection_speed" data-value="5">After extended convo (20+ msgs)</button>
-                    <button type="button" class="likert-bubble" data-name="others_detection_speed" data-value="6">Couldn't tell</button>
+                    <button type="button" class="likert-bubble" data-name="detector_familiarity" data-value="1">Never heard of them</button>
+                    <button type="button" class="likert-bubble" data-name="detector_familiarity" data-value="2">Heard of them</button>
+                    <button type="button" class="likert-bubble" data-name="detector_familiarity" data-value="3">Used one a few times</button>
+                    <button type="button" class="likert-bubble" data-name="detector_familiarity" data-value="4">Use them regularly</button>
                 </div>
-                <input type="hidden" name="others_detection_speed" value="">
+                <input type="hidden" name="detector_familiarity" value="">
+
+                <label>How often do you write texts of a page or more (essays, reports, long emails, posts)?</label>
+                <div class="likert-bubble-group">
+                    <button type="button" class="likert-bubble" data-name="writing_frequency" data-value="1">Rarely or never</button>
+                    <button type="button" class="likert-bubble" data-name="writing_frequency" data-value="2">A few times a year</button>
+                    <button type="button" class="likert-bubble" data-name="writing_frequency" data-value="3">Monthly</button>
+                    <button type="button" class="likert-bubble" data-name="writing_frequency" data-value="4">Weekly</button>
+                    <button type="button" class="likert-bubble" data-name="writing_frequency" data-value="5">Daily</button>
+                </div>
+                <input type="hidden" name="writing_frequency" value="">
 
                 <label>How would you rate the current capabilities of AI chatbots?</label>
                 <div class="likert-bubble-group">
@@ -370,6 +587,13 @@
                     <option value="bachelors">Bachelor's degree</option>
                     <option value="masters">Master's degree</option>
                     <option value="doctorate">Doctoral/Professional degree</option>
+                </select>
+
+                <label>Is English your first language?</label>
+                <select name="english_first_language" required>
+                    <option value="" disabled selected>Select...</option>
+                    <option value="yes">Yes</option>
+                    <option value="no">No</option>
                 </select>
 
                 <label>Ethnicity (check all that apply):</label>
@@ -441,9 +665,9 @@
                     <option value="6">More than 40 hours</option>
                 </select>
 
-                <button type="submit">Submit & Continue</button>
+                <button type="submit">Submit &amp; Continue</button>
             </form>
-            <div id="init-loading" class="loading-message" style="display: none;">
+            <div id="demographics-loading" class="loading-message" style="display: none;">
                 <div id="progress-bar-container">
                     <div id="progress-bar"></div>
                 </div>
@@ -451,375 +675,50 @@
             </div>
         </div>
 
-        <!-- NEW: Role Assignment Phase -->
-        <div id="role-assignment-phase" class="study-phase" style="display: none;">
-            <h2>Your Role</h2>
-
-            <div id="role-card" style="text-align: center; padding: 40px; background: #f8f9fa; border-radius: 8px; margin: 30px 0;">
-                <h1 id="assigned-role-title" style="font-size: 48px; margin: 20px 0; color: #007bff;">
-                    <!-- "INTERROGATOR" or "WITNESS" -->
-                </h1>
+        <!-- Phase 9: Final page (debrief + GET /complete + Prolific redirect) -->
+        <div id="final-page" class="study-phase" style="display: none;">
+            <div id="debrief-section" style="text-align: left;">
+                <h2 style="text-align: center">Thank You</h2>
+                <p>You have finished the study. Here is a short summary of what it was about.</p>
+                <h3>Purpose of the Research</h3>
+                <p>This study examines how people revise AI-assisted writing when it needs to pass as human-written, and when they decide that the writing is good enough to stop. We record each version of the statement, the detector's verdict on it, your two ratings, and your decision to keep editing or to submit.</p>
+                <h3>What Varied Between Participants</h3>
+                <p id="debrief-varied">Participants were randomly assigned to different stated purposes for the statement and different bonus amounts. Some participants saw the detector's verdict after every change; others saw it only at the end. The assigned writing assistant also varied. Everyone wrote the same kind of statement.</p>
+                <p>The stated purpose was a scenario for the writing task. Your statement was not sent to any employer, committee, or blog. It was scored only by AI-detection services for this study.</p>
+                <div id="debrief-bonus">
+                <h3>Your Bonus</h3>
+                <p>If you were offered a bonus and earned it, it will be paid through Prolific after the study closes.</p>
+                </div>
+                <h3>Questions or Concerns</h3>
+                <p>If you have any questions about this research, please contact the Principal Investigator, Nykko Vitali, at nvitali@fas.harvard.edu. If you have any concerns about your rights as a research participant, you may contact cuhs@harvard.edu.</p>
+                <h3>Use of Your Data</h3>
+                <p>If you are comfortable with us using your responses, you do not need to do anything. If you would prefer that we not use your responses, please contact the Principal Investigator and we will remove your data from the study and delete it.</p>
+                <p>Thank you again for your participation!</p>
             </div>
 
-            <!-- PAGINATED POST-DEMOGRAPHICS INSTRUCTIONS -->
-            <div id="post-demo-instructions-container">
-
-                <!-- Page 1: Your Task -->
-                <div class="post-demo-instruction-page" id="post-demo-page-1" style="display: block;">
-                    <!-- INTERROGATOR PAGE 1 -->
-                    <div class="post-demo-content interrogator-post-content" style="display: none;">
-                        <h3>Your Task</h3>
-                        <p>
-                            Your job is to determine if your conversation partner is human or AI through conversation.
-                        </p>
-                        <p>
-                            <strong>You will send the first message.</strong> Ask questions, make observations, and use any conversational strategy you think will help you figure out if they're human or AI.
-                        </p>
-                    </div>
-                    <!-- WITNESS PAGE 1 -->
-                    <div class="post-demo-content witness-post-content" style="display: none;">
-                        <h3>Your Task</h3>
-                        <p>
-                            Your job is to simply chat with your partner using the conversational style you were assigned. They may ask if you are an AI - you can tell them you're a human.
-                        </p>
-                        <p>
-                            <strong>Do not lie and say you are an AI.</strong>
-                        </p>
-                    </div>
-                </div>
-
-                <!-- Page 2: How It Works -->
-                <div class="post-demo-instruction-page" id="post-demo-page-2" style="display: none;">
-                    <!-- INTERROGATOR PAGE 2 -->
-                    <div class="post-demo-content interrogator-post-content" style="display: none;">
-                        <h3>How It Works</h3>
-                        <p>
-                            <strong>After each message from your partner, you'll answer two questions:</strong>
-                        </p>
-                        <ol>
-                            <li><strong>Right now, what's your best guess?</strong> (Human / AI)
-                                <ul>
-                                    <li>This isn't a final answer, just where you're leaning at this moment.</li>
-                                    <li><em>Make sure you're ready before selecting - once you click, it moves on.</em></li>
-                                </ul>
-                            </li>
-                            <li><strong>How confident are you in that guess?</strong> (0-100%)
-                                <ul>
-                                    <li>0% = completely guessing, 50% = somewhat confident, 100% = completely certain</li>
-                                </ul>
-                            </li>
-                        </ol>
-                        <p>
-                            The conversation lasts <strong>7 minutes and 30 seconds</strong>. At the end, you'll submit your final decision.
-                        </p>
-                    </div>
-                    <!-- WITNESS PAGE 2 -->
-                    <div class="post-demo-content witness-post-content" style="display: none;">
-                        <h3>Your Conversation Style</h3>
-                        <div id="witness-social-style-page2" style="margin: 15px 0; padding: 15px; background: #f8f9fa; border-radius: 4px;">
-                            <p style="margin: 0;"><strong>Your style is: <span id="witness-style-name"></span></strong></p>
-                            <p style="margin: 10px 0 0 0;"><span id="witness-style-description"></span></p>
-                        </div>
-                        <p>
-                            The conversation lasts <strong>7 minutes and 30 seconds</strong>. At the end, you will be asked a single question and provide a comment before completing the study.
-                        </p>
-                    </div>
-                </div>
-
-                <!-- Page 3: Important Reminders -->
-                <div class="post-demo-instruction-page" id="post-demo-page-3" style="display: none;">
-                    <!-- INTERROGATOR PAGE 3 -->
-                    <div class="post-demo-content interrogator-post-content" style="display: none;">
-                        <h3>Important Reminders</h3>
-                        <ul>
-                            <li>You can change your mind as many times as you want across turns</li>
-                            <li>We're interested in how your impression evolves over the conversation</li>
-                            <li><strong>Do not refresh the page</strong> - you <strong>will</strong> lose your connection</li>
-                            <li>You may experience message delays between you and your partner. This is expected.</li>
-                            <li>If your partner leaves, you will be routed to the end of the study</li>
-                        </ul>
-                    </div>
-                    <!-- WITNESS PAGE 3 -->
-                    <div class="post-demo-content witness-post-content" style="display: none;">
-                        <h3>Important Reminders</h3>
-                        <ul>
-                            <li>Try to maintain your <strong><span id="witness-style-name-2"></span></strong> style throughout</li>
-                            <li><strong>Do not refresh the page</strong> - you <strong>will</strong> lose your connection</li>
-                            <li>You may experience message delays between you and your partner. This is expected.</li>
-                            <li>If your partner leaves, you will be routed to the end of the study</li>
-                        </ul>
-                    </div>
-                </div>
-
-                <!-- Page 4: Attention Check -->
-                <div class="post-demo-instruction-page" id="post-demo-page-4" style="display: none;">
-                    <h3>Quick Check</h3>
-                    <p id="attention-check-question" style="font-weight: bold; margin-bottom: 15px;"></p>
-
-                    <div id="attention-check-options" style="display: flex; flex-direction: column; gap: 10px;">
-                        <label class="attention-option" style="display: flex; align-items: flex-start; padding: 10px; background: white; border: 1px solid #ddd; border-radius: 5px; cursor: pointer;">
-                            <input type="radio" name="attention-check" value="0" style="margin-right: 10px; margin-top: 3px;">
-                            <span id="attention-option-0"></span>
-                        </label>
-                        <label class="attention-option" style="display: flex; align-items: flex-start; padding: 10px; background: white; border: 1px solid #ddd; border-radius: 5px; cursor: pointer;">
-                            <input type="radio" name="attention-check" value="1" style="margin-right: 10px; margin-top: 3px;">
-                            <span id="attention-option-1"></span>
-                        </label>
-                        <label class="attention-option" style="display: flex; align-items: flex-start; padding: 10px; background: white; border: 1px solid #ddd; border-radius: 5px; cursor: pointer;">
-                            <input type="radio" name="attention-check" value="2" style="margin-right: 10px; margin-top: 3px;">
-                            <span id="attention-option-2"></span>
-                        </label>
-                        <label class="attention-option" style="display: flex; align-items: flex-start; padding: 10px; background: white; border: 1px solid #ddd; border-radius: 5px; cursor: pointer;">
-                            <input type="radio" name="attention-check" value="3" style="margin-right: 10px; margin-top: 3px;">
-                            <span id="attention-option-3"></span>
-                        </label>
-                    </div>
-
-                    <p id="attention-check-error" style="color: #dc3545; margin-top: 15px; display: none;">That's not quite right. Please read the instructions again and try again.</p>
-                </div>
-
-                <!-- Navigation -->
-                <div id="post-demo-nav" style="display: flex; justify-content: space-between; align-items: center; margin-top: 20px;">
-                    <button type="button" id="post-demo-prev-btn" style="padding: 10px 20px; font-size: 16px; cursor: pointer; visibility: hidden;">← Back</button>
-                    <span id="post-demo-page-indicator" style="font-size: 14px; color: #666;">1 / 4</span>
-                    <button type="button" id="post-demo-next-btn" style="padding: 10px 20px; font-size: 16px; cursor: pointer;">Next →</button>
-                </div>
+            <div id="completion-box" class="result-box">
+                <p id="completion-status">Getting your completion code...</p>
+                <p id="completion-code-text" style="display: none;">Your completion code: <strong id="completion-code"></strong></p>
+                <div id="completion-error" class="inline-error" style="display: none;"></div>
             </div>
 
-            <button id="enter-waiting-room-button" class="cta-button" style="display: none; margin-top: 15px; margin-left: auto; margin-right: auto;">Enter Waiting Room</button>
+            <div id="debrief-actions" style="text-align: center; margin-top: 20px;">
+                <button id="complete-retry-button" style="display: none;">Try again</button>
+                <button id="download-debrief-button" class="secondary-button">Download Debrief Form</button>
+                <button id="finish-button" disabled>Finish and return to Prolific</button>
+            </div>
+            <p id="dev-notice" class="muted small" style="display: none; text-align: center;"></p>
         </div>
 
-        <!-- NEW: Waiting Room Phase -->
-        <div id="waiting-room-phase" class="study-phase" style="display: none;">
-            <h2>Waiting Room</h2>
-
-            <div class="waiting-visual" style="text-align: center; margin: 40px 0;">
-                <!-- Two circles: one filled (you), one empty (waiting for partner) -->
-                <div style="display: flex; justify-content: center; gap: 40px; align-items: center;">
-                    <div class="participant-circle filled">
-                        <div class="circle-icon">✓</div>
-                        <p style="margin-top: 10px; font-size: 14px;">You</p>
-                    </div>
-                    <div class="connecting-line">- - -</div>
-                    <div class="participant-circle empty">
-                        <div class="circle-icon">?</div>
-                        <p style="margin-top: 10px; font-size: 14px;">Partner</p>
-                    </div>
-                </div>
-            </div>
-
-            <p id="waiting-status" style="text-align: center; font-size: 18px; margin: 20px 0;">
-                Waiting for a partner to join...
-            </p>
-
-
-            <p style="text-align: center; color: #666; margin-top: 20px; font-style: italic;">
-                ⚠️ <strong>Do not refresh this page</strong> or you may lose your spot
-            </p>
-
-            <p id="waiting-timer" style="text-align: center; margin-top: 30px; font-size: 16px; color: #555;">
-                Time waiting: <span id="elapsed-time" style="font-weight: bold;">0:00</span>
-            </p>
-
-            <div id="waiting-timeout-warning" style="display: none; text-align: center; margin-top: 30px; padding: 20px; background: #fff3cd; border-radius: 5px;">
-                <p style="color: #856404; margin-bottom: 15px;">
-                    <strong>We're having trouble finding a match.</strong><br>
-                    If this continues, please contact the researcher.
-                </p>
-                <button id="leave-waiting-room-button" style="background-color: #dc3545; color: white; border: none; padding: 10px 20px; border-radius: 5px; cursor: pointer; font-size: 16px;">
-                    Report Issue & Exit Study
-                </button>
-            </div>
-        </div>
-
-       <!-- Chat Interface is now the main container for conversation and assessment -->
-       <div id="chat-interface" class="study-phase" style="display: none;">
-           <h3 id="conversation-header">Conversation</h3>
-
-           <!-- AI Mode Retry Banner (shown during API retries, no interaction needed) -->
-           <div id="ai-retry-banner" style="display: none; background-color: #fff3cd; border: 1px solid #ffc107; border-radius: 6px; padding: 10px 15px; margin-bottom: 10px; text-align: center; color: #856404; font-size: 14px;">
-               Sorry! The connection is a bit unstable with your partner. Please be patient.
-           </div>
-
-           <div class="chat-window">
-               <div id="message-list">
-                   <!-- Messages will be appended here -->
-               </div>
-               <div id="typing-indicator" style="display: none;">
-                <div class="dot"></div>
-                <div class="dot"></div>
-                <div class="dot"></div>
-            </div>
-           </div>
-
-           <!-- Assessment Area is NOW INSIDE chat-interface -->
-           <!-- It will be shown/hidden as needed -->
-           <div id="assessment-area" style="display: none; margin-top:15px; padding-top:15px; border-top: 1px solid #eee;">
-            <!-- Interrogator Rating UI -->
-            <div id="interrogator-rating-ui">
-                <h4>Your Assessment</h4>
-
-                <!-- Step 1: Binary Choice (Human/AI) -->
-                <div id="binary-choice-section">
-                <p id="binary-choice-prompt"><strong>What's your best guess right now?</strong></p>
-                <div id="binary-choice-buttons" style="display: flex; gap: 20px; justify-content: center; margin: 20px 0;">
-                    <button id="choice-human-button" class="binary-choice-btn">Human</button>
-                    <button id="choice-ai-button" class="binary-choice-btn">AI</button>
-                </div>
-            </div>
-
-            <!-- Step 2: Confidence Slider (0-100%) -->
-            <div id="confidence-section" style="display: none;">
-                <p><strong>How confident are you in your guess of "<span id="chosen-label"></span>"?</strong></p>
-                <label for="confidence-slider">Confidence: <span id="confidence-value">50</span>%</label>
-                <input type="range" id="confidence-slider" min="0" max="100" step="1" value="50">
-                <div class="slider-labels">
-                    <span class="label-left">0% (Completely Guessing)</span>
-                    <span class="label-center">50% (Somewhat Confident)</span>
-                    <span class="label-right">100% (Completely Certain)</span>
-                </div>
-                <button id="submit-rating-button">Submit Rating</button>
-                <div id="rating-loading" class="loading-message" style="display: none;">Submitting rating...</div>
-            </div>
-
-            <div id="comment-section" style="display: none; margin-top: 20px;">
-                <label for="feels-off-checkbox">Include a comment about this turn?</label>
-                <input type="checkbox" id="feels-off-checkbox">
-                <div id="comment-input-area" style="display: none;">
-                    <textarea id="feels-off-comment" placeholder="Your comment..."></textarea>
-                    <button id="submit-comment-button">Submit Comment</button>
-                    <div id="comment-loading" class="loading-message" style="display: none;">Submitting comment...</div>
-                </div>
-            </div>
-            </div>
-
-            <!-- NEW: Witness Waiting UI (shown instead of rating UI for witnesses) -->
-            <div id="witness-waiting-ui" style="display: none; text-align: center; padding: 30px;">
-                <div class="loading-spinner" style="display: inline-block; width: 40px; height: 40px; border: 4px solid #f3f3f3; border-top: 4px solid #007bff; border-radius: 50%; animation: spin 1s linear infinite;"></div>
-                <p style="font-size: 18px; margin-top: 20px; color: #555;">
-                    Waiting for interrogator to respond...
-                </p>
-            </div>
-        </div>
-
-        <!-- Chat Input Area will be hidden when assessment is active -->
-        <div id="chat-input-container" class="chat-input-area">
-            <input type="text" id="user-message-input" placeholder="Type your message here...">
-            <button id="send-message-button">Send</button>
-        </div>
-    </div>
-    <div id="feedback-phase" class="study-phase" style="display: none;">
-        <h2>Share Your Experience</h2>
-        <p>Before we conclude, please share your feedback about the conversation. Please describe any thoughts about whether your partner was human or AI, and why.</p>
-        <textarea id="feedback-textarea" placeholder="Your thoughts..." rows="6" style="width: 100%; box-sizing: border-box;"></textarea>
-        <div style="display: flex; justify-content: center; gap: 15px; margin-top: 20px;">
-            <button id="submit-feedback-button">Submit Feedback</button>
-        </div>
-    </div>
-       <div id="final-page" class="study-phase" style="display: none;">
-           <div id="debrief-phase">
-               <div id="debrief-section" style="text-align: left;">
-                   <h2 style="text-align: center">Study Debrief Form</h2>
-                   <p>Thank you for participating in our research study. Now that you have completed the study, we would like to explain its purpose in more detail.</p>
-                   <h3>Purpose of the Research</h3>
-                   <p>This study examines how people detect AI-generated communication and the cognitive processes underlying these judgments. We are specifically interested in understanding whether individuals possess implicit detection abilities, such as gut feelings, for identifying AI, even when they cannot explicitly articulate their suspicions. We also are investigating which specific conversational tactics most effectively lead humans to believe they are interacting with another human rather than AI.</p>
-                   <h3>Why We Did Not Tell You Everything Initially</h3>
-                   <p>When participants know exactly what researchers are studying, it can sometimes influence their responses and make them hyper-aware of potential AI "tells" or tactics. To get natural responses about your evolving confidence during the conversation, we did not tell you specifically that we were studying particular humanization tactics or measuring implicit detection processes. You were told the study involved determining whether you were talking to a human or AI, which was true, but we did not disclose our specific interest in how particular conversational strategies influence your moment-to-moment judgments.</p>
-                   <h3>The Complete Picture</h3>
-                   <p>In this study, you either engaged in a conversation while providing ratings about whether you believed you were interacting with a human or AI, or you were told to emulate a particular conversation style while chatting with another human. What you may not have realized is that:</p>
-                   <ul>
-                       <li>If you made decisions your partner was either an AI or a human. If you were told to adopt a specific persona, your partner was always a human.</li>
-                       <li>Your ratings and the time you took to make each rating allow us to model how evidence accumulated in your mind toward an "AI" or "human" decision. This helps us understand the cognitive processes behind AI belief.</li>
-                       <li>Our hypothesis is that people possess subtle, implicit abilities to detect AI-generated communication that may not always rise to conscious awareness. We also predict that certain conversational tactics will be more effective at convincing humans they are talking to another person. By analyzing your moment-to-moment confidence changes alongside the specific tactics the AI or human used, we can better understand which strategies most effectively influence human judgment of AI authenticity.</li>
-                   </ul>
-                   <h3>Questions or Concerns</h3>
-                   <p>If you have any questions about this research, please contact the Principal Investigator, Nykko Vitali, at nvitali@fas.harvard.edu. If you have any concerns about your rights as a research participant, you may contact cuhs@harvard.edu</p>
-                   <h3>Use of Your Data</h3>
-                   <p>If you are comfortable with us using your responses now that you know the full purpose of the study, you don't need to do anything. If you would prefer that we not use your responses, please reach out to the Principal Investigator and let them know. We will then remove your data from the study and delete it.</p>
-                   <p>Thank you again for your participation!</p>
-               </div>
-               <div id="debrief-actions" style="text-align: center; margin-top: 20px;">
-                   <button id="download-debrief-button">Download Debrief Form</button>
-                   <button id="continue-after-debrief-button">Continue</button>
-               </div>
-           </div>
-
-           <div id="summary-phase" style="display: none;">
-               <h2>Thank you for participating!</h2>
-               <p id="final-decision-text"></p>
-               <p id="final-decision-time-text"></p>
-               <div id="confidence-trend-chart">
-                   <h4>Confidence Trend (0–100)</h4>
-                   <pre id="confidence-trend-data"></pre>
-               </div>
-               <button id="new-session-button">Start New Session</button>
-               <div id="researcher-data-section" style="display: none; margin-top: 20px; border-top: 1px solid #ccc; padding-top: 10px;">
-                   <h3>Researcher Data (Debug View)</h3>
-                   <button id="load-researcher-data-button">Load Full Researcher Data</button>
-                   <pre id="researcher-data-content" style="white-space: pre-wrap; word-wrap: break-word; max-height: 400px; overflow-y: auto; background-color: #f0f0f0; padding:10px;"></pre>
-               </div>
-           </div>
-       </div>
         <div id="error-message-area" class="error-message" style="display:none;"></div>
    </div>
 
-   <div id="demographics-modal" class="modal-overlay" style="display: none;">
+    <!-- Generic blocking modal (fatal errors, notices). One button, text set by script. -->
+    <div id="blocking-modal" class="modal-overlay" style="display: none;">
         <div class="modal-content">
-            <p>Before we begin you will fill out a demographics questionnaire to better understand your experiences with AI, as well as basic information about you.</p>
-            <button id="modal-continue-button">I Understand, Continue</button>
-        </div>
-    </div>
-
-    <div id="final-instructions-modal" class="modal-overlay" style="display: none;">
-        <div class="modal-content">
-            <p>In a moment you will see a conversation box. Your job is to decide if your conversational partner is a human, or an AI.</p>
-            <p><em>Consider what kinds of messages may clue you in to if your conversational partner is an AI or a human.
-                You should consider each message sent by your conversation partner as evidence towards your judgment for that turn. You are free to chat as you would like.</em></p>
-
-            <p><strong>After each message from your partner, you'll answer two questions:</strong></p>
-            <ol>
-                <li><strong>What's your best guess right now?</strong> Click either "Human" or "AI"
-                    <ul>
-                        <li><em>Be ready before clicking - once you select, it immediately moves to the next question.</em></li>
-                    </ul>
-                </li>
-                <li><strong>How confident are you?</strong> Use the slider (0-100%)
-                    <ul>
-                        <li>0% = completely guessing, 50% = somewhat confident, 100% = completely certain</li>
-                    </ul>
-                </li>
-            </ol>
-
-            <p>You will chat with your partner for 7 minutes and 30 seconds. At the 7 minute 30 second mark you will make a final determination.</p>
-            <p>Response delays due to the strength of connection between you and your partner may occur when messages are sent and received, but the total chat time will be 7 minutes and 30 seconds.</p>
-            <button id="final-instructions-button">I understand</button>
-        </div>
-    </div>
-
-    <!-- NEW: Witness end-of-study modal -->
-    <div id="witness-end-modal" class="modal-overlay" style="display: none;">
-        <div class="modal-content">
-            <h3 id="witness-end-title" style="text-align: center; margin-top: 0;">Study Ended</h3>
-            <p id="witness-end-message" style="text-align: center;"></p>
-            <button id="witness-end-continue-button" style="margin: 20px auto; display: block;">Continue</button>
-        </div>
-    </div>
-
-    <!-- NEW: Interrogator connection issue modal (human mode partner dropout) -->
-    <div id="interrogator-connection-modal" class="modal-overlay" style="display: none;">
-        <div class="modal-content">
-            <h3 style="text-align: center; margin-top: 0;">Connection Issue</h3>
-            <p style="text-align: center;">There was a connection issue with your partner. Please proceed to complete your final assessment of the conversation.</p>
-            <button id="interrogator-connection-continue-button" style="margin: 20px auto; display: block;">Continue to Final Assessment</button>
-        </div>
-    </div>
-
-    <!-- NEW: AI connection failure modal (API retry failures) -->
-    <div id="ai-connection-modal" class="modal-overlay" style="display: none;">
-        <div class="modal-content">
-            <h3 id="ai-connection-title" style="text-align: center; margin-top: 0;">Connection Issue</h3>
-            <p id="ai-connection-message" style="text-align: center;"></p>
-            <button id="ai-connection-button" style="margin: 20px auto; display: block;"></button>
+            <h3 id="blocking-modal-title" style="text-align: center; margin-top: 0;"></h3>
+            <p id="blocking-modal-message" style="text-align: center;"></p>
+            <button id="blocking-modal-button" style="margin: 20px auto; display: block;">Continue</button>
         </div>
     </div>
 
