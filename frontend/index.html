@@ -40,13 +40,13 @@
                  <p>You are being asked to participate in a research study. This form gives you information about the study.</p>
 
                  <h4>Purpose of Research</h4>
-                 <p>This research examines how people write with AI writing assistants and how they judge whether a piece of writing looks human-written.</p>
+                 <p id="consent-purpose">This research examines how people write with AI writing assistants and how they judge whether a piece of writing looks human-written.</p>
 
                  <h4>What You Will Be Asked to Do</h4>
                  <p>If you agree to participate, you will:</p>
                  <ul>
                      <li>Answer a few short questions about what makes writing look AI-generated to you</li>
-                     <li>Produce a short personal statement (at least <span class="consent-min-words">250</span> words) using an AI writing assistant that we assign to you. The assistant writes the text; you direct it, ask for revisions, and may make small edits to its wording</li>
+                     <li id="consent-task-item">Produce a short personal statement (at least <span class="consent-min-words">250</span> words) using an AI writing assistant that we assign to you. The assistant writes the text; you direct it, ask for revisions, and may make small edits to its wording</li>
                      <li>Each time you finish a change, rate how likely a person and an AI detector would be to judge the statement as human-written, and decide whether to keep editing or to submit</li>
                      <li>Have your submitted statement scored by an AI-detection service</li>
                      <li>Answer short questions about the task, then complete a brief demographic questionnaire</li>
@@ -77,7 +77,7 @@
                  <h4>Confidentiality</h4>
                  <ul>
                     <li>Your responses will be stored securely</li>
-                    <li>The statement text and your messages to the assistant are sent to the assistant's provider and to AI-detection services for scoring. Your Prolific ID is never sent to these services</li>
+                    <li id="consent-data-item">The statement text and your messages to the assistant are sent to the assistant's provider and to AI-detection services for scoring. Your Prolific ID is never sent to these services</li>
                     <li>Data will be analyzed without any identifying information</li>
                     <li>Only researchers will have access to the data</li>
                     <li>Anonymized results derived from your data may be shared in scientific databases for transparency of our research process</li>
@@ -250,7 +250,7 @@
                 <div class="instruction-page" id="instruction-page-1" style="display: block;">
                     <div class="instruction-content">
                         <h3>Your Writing Task</h3>
-                        <p>You will be asked to do a writing task with the help of an LLM. All tasks are around 250 words. The goal is for the passage to sound as human as possible before moving on.</p>
+                        <p id="instr-task-intro">You will be asked to do a writing task with the help of an LLM. All tasks are around 250 words. The goal is for the passage to sound as human as possible before moving on.</p>
                         <p id="instr-topic-text" class="key-instructions"></p>
                         <p><strong>Purpose of the statement:</strong></p>
                         <p id="instr-purpose-text" class="purpose-box"></p>
@@ -261,8 +261,8 @@
                 <div class="instruction-page" id="instruction-page-2" style="display: none;">
                     <div class="instruction-content">
                         <h3>How the Workspace Works</h3>
-                        <p>On the <strong>LEFT</strong> will be a chat with your writing assistant. The assistant is powered by an LLM. For the task, you can ask it to write a draft, revise a draft, or answer any questions to aid you in completing the task.</p>
-                        <p>On the <strong>RIGHT</strong> you will see the passage the assistant produces. Click <em>Use this as my statement</em> under an assistant reply to place it there. The statement must come from the assistant; once it is there you may ask the assistant for revisions or make small edits to its wording yourself.</p>
+                        <p id="instr-ws-left">On the <strong>LEFT</strong> will be a chat with your writing assistant. The assistant is powered by an LLM. For the task, you can ask it to write a draft, revise a draft, or answer any questions to aid you in completing the task.</p>
+                        <p id="instr-ws-right">On the <strong>RIGHT</strong> you will see the passage the assistant produces. Click <em>Use this as my statement</em> under an assistant reply to place it there. The statement must come from the assistant; once it is there you may ask the assistant for revisions or make small edits to its wording yourself.</p>
                     </div>
                 </div>
 
