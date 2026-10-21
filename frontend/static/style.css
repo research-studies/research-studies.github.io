@@ -945,3 +945,10 @@ button > * {
  #assessment-area .detector-panel {
     margin: 4px 0 12px 0;
  }
+
+ .confirm-submit-buttons {
+    display: flex;
+    justify-content: center;
+    gap: 16px;
+    margin-top: 20px;
+ }
