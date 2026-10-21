@@ -1203,11 +1203,11 @@ document.addEventListener('DOMContentLoaded', () => {
             : 'On the next page we ask a short question about the instructions.';
         document.getElementById('debrief-bonus').style.display = bonusOn ? '' : 'none';
         if (!bonusOn) {
-            document.getElementById('debrief-varied').textContent = 'Participants were randomly assigned to different stated purposes for the statement. Some participants saw the detector\'s verdict after every change; others saw it only at the end. The assigned writing assistant also varied. Everyone wrote the same kind of statement.';
+            document.getElementById('debrief-varied').textContent = 'Participants were randomly assigned to different stated purposes for the statement. Some participants saw the detector\'s verdict after every change; others did not see it while editing. The assigned writing assistant also varied. Everyone wrote the same kind of statement.';
         }
         document.getElementById('instr-feedback-note').textContent = startData.condition_feedback
             ? 'After every change, the detector\'s verdict for that version is shown on the rating screen.'
-            : 'The detector\'s verdict is shown once, after you submit.';
+            : 'The detector scores your statement after you submit it.';
 
         wsTopicText.textContent = startData.topic_text || '';
         wsPurposeText.textContent = startData.purpose_text || '';
@@ -2362,7 +2362,7 @@ By clicking "I agree", you indicated that:
     }
 
     async function doFinalSubmit(versionId, censored) {
-        ratingLoadingDiv.textContent = 'Submitting your statement and getting the final verdict...';
+        ratingLoadingDiv.textContent = 'Submitting your statement...';
         ratingLoadingDiv.style.display = 'block';
         try {
             const result = await apiPost(`/api/session/${sessionToken}/submit`, { version_id: versionId, censored: !!censored });
@@ -2391,6 +2391,14 @@ By clicking "I agree", you indicated that:
     // =====================================================================================
     function showResult() {
         const f = finalResult || {};
+        // Only a pass is shown. A fail, or a verdict we could not get, goes straight on to the final questions.
+        if (f.passed !== true) {
+            resultAcknowledged = true;
+            logUiEvent('result_page_skipped', { passed: f.passed === undefined ? null : f.passed, unavailable: !!(f.unavailable || f.scoring_unavailable) });
+            saveState();
+            afterResult();
+            return;
+        }
         const bonus = Number((f.bonus_usd !== undefined && f.bonus_usd !== null) ? f.bonus_usd : (startData.bonus_usd || 0));
         resultVerdict.className = '';
         resultPassed.className = '';
@@ -2432,7 +2440,7 @@ By clicking "I agree", you indicated that:
         resultPassed.className = 'verdict-fail';
         resultVerdict.textContent = 'Time is up.';
         resultPassed.textContent = `No statement of at least ${minWords()} words was recorded, so there is nothing for the detector to score.`;
-        resultBonus.textContent = Number(startData.bonus_usd || 0) > 0 ? 'No bonus was earned.' : '';
+        resultBonus.textContent = '';
         resultNote.textContent = 'Please continue to the final questions.';
         saveState();
         resultBonus.style.display = resultBonus.textContent ? '' : 'none';
@@ -2730,7 +2738,7 @@ Purpose of the Research
 This study examines how people revise AI-assisted writing when it needs to pass as human-written, and when they decide that the writing is good enough to stop. We record each version of the statement, the detector's verdict on it, your two ratings, and your decision to keep editing or to submit.
 
 What Varied Between Participants
-Participants were randomly assigned to different stated purposes for the statement${hasBonus() ? ' and different bonus amounts' : ''}. Some participants saw the detector's verdict after every change; others saw it only at the end.${isPrefill() ? '' : ' The assigned writing assistant also varied.'} Everyone wrote the same kind of statement.
+Participants were randomly assigned to different stated purposes for the statement${hasBonus() ? ' and different bonus amounts' : ''}. Some participants saw the detector's verdict after every change; others did not see it while editing.${isPrefill() ? '' : ' The assigned writing assistant also varied.'} Everyone wrote the same kind of statement.
 
 The stated purpose was a scenario for the writing task. Your statement was not sent to any employer, committee, or blog. It was scored only by AI-detection services for this study.
 
