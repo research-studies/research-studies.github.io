@@ -272,7 +272,7 @@
                         <h3>Finishing a Change</h3>
                         <p>The statement must be at least <strong><span id="instr-min-words">250</span> words</strong>. A live word count is shown under the editor.</p>
                         <p>When you finish a change, click <strong>Done with this change</strong>. You will then rate the statement on two sliders and choose to <strong>keep editing</strong> or <strong>submit</strong>. You can make as many changes as you like within the time limit.</p>
-                        <p>You have <strong><span id="instr-time-cap">15</span> minutes</strong> for the writing part. A timer is shown at the top right. When time runs out, your most recent finished version is submitted automatically.</p>
+                        <p>You have <strong><span id="instr-time-cap">5</span> minutes</strong> for the editing part. A timer is shown at the top right. When time runs out, your most recent finished version is submitted automatically.</p>
                         <p><strong>Do not refresh the page</strong> during the task.</p>
                     </div>
                 </div>
@@ -307,6 +307,8 @@
                             <label class="check-option"><input type="radio" name="check-q2" value="1"><span id="check-q2-option-1"></span></label>
                             <label class="check-option"><input type="radio" name="check-q2" value="2"><span id="check-q2-option-2"></span></label>
                             <label class="check-option"><input type="radio" name="check-q2" value="3"><span id="check-q2-option-3"></span></label>
+                            <label class="check-option"><input type="radio" name="check-q2" value="4"><span id="check-q2-option-4"></span></label>
+                            <label class="check-option"><input type="radio" name="check-q2" value="5"><span id="check-q2-option-5"></span></label>
                         </div>
 
                         <p id="comprehension-check-error" class="inline-error" style="display: none;"></p>
@@ -386,6 +388,7 @@
             </div>
 
             <p id="rating-version-info" class="muted"></p>
+            <div class="rating-grid">
             <details class="essay-preview-details">
                 <summary>Show the text of this version</summary>
                 <pre id="rating-essay-preview" class="essay-preview"></pre>
@@ -422,6 +425,7 @@
                     <button id="keep-editing-button" class="decision-button" disabled>Keep editing</button>
                     <button id="submit-final-button" class="decision-button" disabled>Submit as my final statement</button>
                 </div>
+            </div>
             </div>
         </div>
 
