@@ -93,6 +93,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const ratingLoadingDiv = document.getElementById('rating-loading');
     const keepEditingButton = document.getElementById('keep-editing-button');
     const submitFinalButton = document.getElementById('submit-final-button');
+    const checkAiButton = document.getElementById('check-ai-button');
 
     // Phase 6: result
     const resultPhaseDiv = document.getElementById('result-phase');
@@ -180,6 +181,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const pageLoadedAt = Date.now();
     let sessionToken = null;
     let startData = null;            // response of POST /api/session/start
+    // Feedback group: the verdict is shown only when they click Check for AI. Submit appears after their first check.
+    let hasCheckedDetector = false;
     // Editing time limit and bonus amount set by the page, so the page stays correct even when the
     // server has not been redeployed with new TIME_CAP_MIN / BONUS_LADDER_USD values. The server's
     // values are kept as server_* fields and logged. Anyone offered a bonus is offered SITE_BONUS_USD.
@@ -195,6 +198,11 @@ document.addEventListener('DOMContentLoaded', () => {
             data.server_bonus_usd = data.bonus_usd;
             data.bonus_usd = SITE_BONUS_USD;
             data.bonus_rule_text = String(data.bonus_rule_text || '').replace(/\$\d+(\.\d+)?/g, formatMoney(SITE_BONUS_USD));
+        }
+        if (data.bonus_rule_text) {
+            data.bonus_rule_text = String(data.bonus_rule_text)
+                .replace(" You will see the detector's verdict after every change you make.", " After each change, you can click Check for AI to see the detector's verdict.")
+                .replace(" You will not see the detector's verdict until you submit.", " You will not see the detector's verdict while you edit.");
         }
         return data;
     }
@@ -283,7 +291,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 chatMessages,
                 essayDraft: essayEditor ? essayEditor.value : '',
                 ratingPending,
-                isSubmitted, finalResult, noStatement, completionCode,
+                isSubmitted, finalResult, noStatement, completionCode, hasCheckedDetector,
                 savedAt: Date.now()
             };
             localStorage.setItem(STATE_KEY, JSON.stringify(state));
@@ -1223,10 +1231,10 @@ document.addEventListener('DOMContentLoaded', () => {
         // No-bonus participants are never told that a bonus exists, including on the consent page.
         document.querySelectorAll('.consent-bonus-line').forEach(el => { el.style.display = bonusOn ? '' : 'none'; });
         if (!bonusOn) {
-            document.getElementById('debrief-varied').textContent = 'Participants were randomly assigned to different stated purposes for the statement. Some participants saw the detector\'s verdict after every change; others did not see it while editing. The assigned writing assistant also varied. Everyone wrote the same kind of statement.';
+            document.getElementById('debrief-varied').textContent = 'Participants were randomly assigned to different stated purposes for the statement. Some participants could check the detector\'s verdict after each change; others did not see it while editing. The assigned writing assistant also varied. Everyone wrote the same kind of statement.';
         }
         document.getElementById('instr-feedback-note').textContent = startData.condition_feedback
-            ? 'After every change, the detector\'s verdict for that version is shown on the rating screen.'
+            ? 'After each change, you can click Check for AI on the rating screen to see the detector\'s verdict for that version. You need to check at least once before you can submit.'
             : 'The detector scores your statement after you submit it.';
 
         wsTopicText.textContent = startData.topic_text || '';
@@ -1272,6 +1280,7 @@ document.addEventListener('DOMContentLoaded', () => {
         finalResult = saved.finalResult || null;
         noStatement = !!saved.noStatement;
         completionCode = saved.completionCode || null;
+        hasCheckedDetector = !!saved.hasCheckedDetector;
 
         populateStaticTexts();
         essayEditor.value = saved.essayDraft || '';
@@ -2078,7 +2087,7 @@ By clicking "I agree", you indicated that:
         ratingPending = version;
         logUiEvent('version_recorded', {
             seq: version.seq, source, word_count: version.word_count,
-            detector_shown: !!(result.detector && result.detector.pangram),
+            detector_received: !!(result.detector && result.detector.pangram),   // shown only if they click Check for AI (event detector_checked)
             minutes_since_workspace_open: workspaceOpenedAt ? (Date.now() - workspaceOpenedAt) / 60000 : null
         }, version.version_id);
         saveState();
@@ -2172,7 +2181,9 @@ By clicking "I agree", you indicated that:
             openedAt: Date.now(),
             sliderLog: [],
             touched: { human: false, detector: false },
-            rated: false
+            rated: false,
+            checked: false,
+            checkedAtMs: null
         };
         ratingPending = version;
         ratingBusy = false;
@@ -2190,19 +2201,21 @@ By clicking "I agree", you indicated that:
         const previewDetails = ratingEssayPreview.closest('details');
         if (previewDetails) previewDetails.open = true;
 
-        renderDetectorPanel(version);
+        renderDetectorPanel(version, false);   // feedback group: hidden until they click Check for AI
 
-        keepEditingButton.style.display = ratingContext.mode === 'timeout' ? 'none' : 'inline-block';
-        // Counterbalance button position across participants (fixed for a given person)
+        // Counterbalance button position across participants (fixed for a given person).
+        // Check for AI sits between the other two, on the Submit side when Submit is not shown yet.
         const submitOnLeft = !!sessionToken && parseInt(sessionToken.slice(-1), 16) % 2 === 1;
-        submitFinalButton.style.order = submitOnLeft ? '0' : '1';
-        keepEditingButton.style.order = submitOnLeft ? '1' : '0';
+        submitFinalButton.style.order = submitOnLeft ? '0' : '2';
+        checkAiButton.style.order = '1';
+        keepEditingButton.style.order = submitOnLeft ? '2' : '0';
+        setRatingButtonVisibility();
         timeoutNotice.style.display = ratingContext.mode === 'timeout' ? 'block' : 'none';
         submitFinalButton.textContent = ratingContext.mode === 'timeout' ? 'Submit my final statement' : 'Submit as my final statement';
         ratingHint.textContent = 'Move both sliders to continue.';
         updateRatingButtons();
 
-        logUiEvent('rating_screen_opened', { seq: version.seq, mode: ratingContext.mode, detector_shown: detectorPanel.style.display !== 'none', submit_on_left: submitOnLeft }, version.version_id);
+        logUiEvent('rating_screen_opened', { seq: version.seq, mode: ratingContext.mode, feedback: isFeedback(), check_offered: checkAiButton.style.display !== 'none', submit_offered: submitFinalButton.style.display !== 'none', submit_on_left: submitOnLeft }, version.version_id);
         showMainPhase('rating');
         if (ratingContext.mode === 'timeout') armTimeoutBackstop();
     }
@@ -2215,9 +2228,22 @@ By clicking "I agree", you indicated that:
         return 'edited by you';
     }
 
+    function isFeedback() { return !!(startData && startData.condition_feedback); }
+
+    // Which decision buttons the rating screen shows.
+    // No-feedback group: Keep editing + Submit. Timeout: Submit only.
+    // Feedback group: Keep editing + Check for AI, plus Submit once they have checked at least once.
+    function setRatingButtonVisibility() {
+        if (!ratingContext) return;
+        const timeout = ratingContext.mode === 'timeout';
+        keepEditingButton.style.display = timeout ? 'none' : 'inline-block';
+        checkAiButton.style.display = (!timeout && isFeedback() && !ratingContext.checked) ? 'inline-block' : 'none';
+        submitFinalButton.style.display = (timeout || !isFeedback() || hasCheckedDetector) ? 'inline-block' : 'none';
+    }
+
     // Pangram verdict panel: label + passed / not yet. Never shows the raw score.
-    function renderDetectorPanel(version) {
-        const shown = !!(startData && startData.condition_feedback && version.detector && version.detector.pangram);
+    function renderDetectorPanel(version, reveal) {
+        const shown = !!(reveal && isFeedback() && version.detector && version.detector.pangram);
         detectorPanel.className = 'detector-panel';
         if (!shown) {
             detectorPanel.style.display = 'none';
@@ -2251,6 +2277,7 @@ By clicking "I agree", you indicated that:
         const ready = !ratingBusy && (both || ratingContext.mode === 'timeout');
         keepEditingButton.disabled = !ready || ratingContext.mode === 'timeout';
         submitFinalButton.disabled = !ready;
+        checkAiButton.disabled = !ready;
         ratingHint.style.display = both ? 'none' : 'block';
     }
 
@@ -2290,12 +2317,38 @@ By clicking "I agree", you indicated that:
     attachSliderLogging(sliderDetector, sliderDetectorValue, 'detector');
 
     keepEditingButton.addEventListener('click', () => submitRating('continue'));
+    // Check for AI: the ratings are locked first, so they are given before the verdict is seen.
+    checkAiButton.addEventListener('click', () => {
+        const ctx = ratingContext;
+        if (!ctx || ratingBusy || ctx.checked || !isFeedback()) return;
+        if (!(ctx.touched.human && ctx.touched.detector)) {
+            showInlineError(ratingErrorDiv, 'Please move both sliders before you check.');
+            return;
+        }
+        hideInlineError(ratingErrorDiv);
+        ctx.checked = true;
+        ctx.checkedAtMs = Date.now() - ctx.openedAt;
+        const firstCheck = !hasCheckedDetector;
+        hasCheckedDetector = true;
+        sliderHuman.disabled = true;
+        sliderDetector.disabled = true;
+        ctx.sliderLog.push({ slider: 'human', event: 'detector_checked', t_ms: ctx.checkedAtMs, value: parseInt(sliderHuman.value, 10) });
+        ctx.sliderLog.push({ slider: 'detector', event: 'detector_checked', t_ms: ctx.checkedAtMs, value: parseInt(sliderDetector.value, 10) });
+        renderDetectorPanel(ctx.version, true);
+        setRatingButtonVisibility();
+        updateRatingButtons();
+        ratingHint.textContent = 'Now choose whether to keep editing or submit.';
+        ratingHint.style.display = 'block';
+        const p = (ctx.version.detector && ctx.version.detector.pangram) || {};
+        logUiEvent('detector_checked', { seq: ctx.version.seq, first_check: firstCheck, t_ms: ctx.checkedAtMs, conf_human: parseInt(sliderHuman.value, 10), conf_detector: parseInt(sliderDetector.value, 10), label: p.label === undefined ? null : p.label, passed: p.passed === undefined ? null : p.passed }, ctx.version.version_id);
+        saveState();
+    });
     submitFinalButton.addEventListener('click', () => submitRating(ratingContext && ratingContext.mode === 'timeout' ? 'timeout' : 'submit'));
 
     function switchRatingToTimeoutMode() {
         if (!ratingContext) return;
         ratingContext.mode = 'timeout';
-        keepEditingButton.style.display = 'none';
+        setRatingButtonVisibility();
         timeoutNotice.style.display = 'block';
         submitFinalButton.textContent = 'Submit my final statement';
         updateRatingButtons();
@@ -2347,6 +2400,8 @@ By clicking "I agree", you indicated that:
                     events: ctx.sliderLog,
                     human_touched: ctx.touched.human,
                     detector_touched: ctx.touched.detector,
+                    detector_checked: !!ctx.checked,
+                    detector_checked_t_ms: ctx.checkedAtMs,
                     mode: ctx.mode,
                     cumulative_tab_hidden_ms: cumulativeTabHiddenMs
                 }
@@ -2768,7 +2823,7 @@ Purpose of the Research
 This study examines how people revise AI-assisted writing when it needs to pass as human-written, and when they decide that the writing is good enough to stop. We record each version of the statement, the detector's verdict on it, your two ratings, and your decision to keep editing or to submit.
 
 What Varied Between Participants
-Participants were randomly assigned to different stated purposes for the statement${hasBonus() ? ' and to whether a bonus was offered' : ''}. Some participants saw the detector's verdict after every change; others did not see it while editing.${isPrefill() ? '' : ' The assigned writing assistant also varied.'} Everyone wrote the same kind of statement.
+Participants were randomly assigned to different stated purposes for the statement${hasBonus() ? ' and to whether a bonus was offered' : ''}. Some participants could check the detector's verdict after each change; others did not see it while editing.${isPrefill() ? '' : ' The assigned writing assistant also varied.'} Everyone wrote the same kind of statement.
 
 The stated purpose was a scenario for the writing task. Your statement was not sent to any employer, committee, or blog. It was scored only by AI-detection services for this study.
 
