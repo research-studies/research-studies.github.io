@@ -936,3 +936,12 @@ button > * {
         max-height: 50vh;
     }
  }
+
+ /* Ratings are locked once the verdict is checked */
+ .rating-slider:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+ }
+ #assessment-area .detector-panel {
+    margin: 4px 0 12px 0;
+ }
