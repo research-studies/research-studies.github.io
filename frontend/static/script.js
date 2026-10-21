@@ -1360,7 +1360,7 @@ If you agree to participate, you will:
 - Each time you finish a change, rate how likely a person and an AI detector would be to judge the statement as human-written, and decide whether to keep editing or to submit
 - Have your submitted statement scored by an AI-detection service
 - Answer short questions about the task, then complete a brief demographic questionnaire
-- The writing part has a time limit of ${startData ? startData.time_cap_min : 25} minutes. The total time commitment is approximately 30 minutes
+- The editing part has a time limit of ${startData ? startData.time_cap_min : 5} minutes. The total time commitment is approximately 10 minutes
 - Please do not include information that could identify you or another person in your writing
 
 Your Rights as a Participant
