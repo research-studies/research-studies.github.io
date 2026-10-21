@@ -1672,13 +1672,17 @@ By clicking "I agree", you indicated that:
         essayWorkingDiv.style.display = 'none';
         renderChat();
         updateWordCount();
-        showMainPhase('workspace');
         if (isPrefill() && versions.length === 0) {
-            if (timeExpired || workspaceLocked) { lockWorkspace(); if (!isSubmitted) handleTimeExpired('resume'); return; }
+            if (timeExpired || workspaceLocked) { showMainPhase('workspace'); lockWorkspace(); if (!isSubmitted) handleTimeExpired('resume'); return; }
+            // The untouched draft is rated first, so go straight to its rating screen without flashing the editor.
+            document.getElementById('loading-text').textContent = 'Loading the statement. One moment.';
+            document.getElementById('loading-row').style.display = '';
+            showMainPhase('loading');
             startWorkspaceTimer();
             loadPrefillDraft();
             return;
         }
+        showMainPhase('workspace');
         notifyWorkspaceOpen();
         if (timeExpired || workspaceLocked) {
             lockWorkspace();
@@ -2642,6 +2646,7 @@ By clicking "I agree", you indicated that:
             logUiEvent('prefill_load_failed', { code: error.code || null, message: error.message });
             if (error.code === 'already_submitted') { recoverSubmitted(); return; }
             if (error.code === 'unknown_session') { handleUnknownSession(); return; }
+            showMainPhase('workspace');
             showInlineError(essayErrorDiv, 'The statement could not be loaded. Please try again.', 'Try again', () => loadPrefillDraft());
         }
     }
