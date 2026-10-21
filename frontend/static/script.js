@@ -180,13 +180,21 @@ document.addEventListener('DOMContentLoaded', () => {
     const pageLoadedAt = Date.now();
     let sessionToken = null;
     let startData = null;            // response of POST /api/session/start
-    // Editing time limit set by the page. The server's own limit is only a backstop, so the page
-    // stays correct even when the server has not been redeployed with a new TIME_CAP_MIN.
+    // Editing time limit and bonus amount set by the page, so the page stays correct even when the
+    // server has not been redeployed with new TIME_CAP_MIN / BONUS_LADDER_USD values. The server's
+    // values are kept as server_* fields and logged. Anyone offered a bonus is offered SITE_BONUS_USD.
     const SITE_TIME_CAP_MIN = 5;
-    function applySiteTimeCap(data) {
-        if (data && Number(data.time_cap_min) !== SITE_TIME_CAP_MIN) {
+    const SITE_BONUS_USD = 0.5;
+    function applySiteSettings(data) {
+        if (!data) return data;
+        if (Number(data.time_cap_min) !== SITE_TIME_CAP_MIN) {
             data.server_time_cap_min = data.time_cap_min;
             data.time_cap_min = SITE_TIME_CAP_MIN;
+        }
+        if (Number(data.bonus_usd || 0) > 0 && Number(data.bonus_usd) !== SITE_BONUS_USD) {
+            data.server_bonus_usd = data.bonus_usd;
+            data.bonus_usd = SITE_BONUS_USD;
+            data.bonus_rule_text = String(data.bonus_rule_text || '').replace(/\$\d+(\.\d+)?/g, formatMoney(SITE_BONUS_USD));
         }
         return data;
     }
@@ -1168,7 +1176,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (!result || !result.session_token) throw new Error('The server did not return a session.');
 
             sessionToken = result.session_token;
-            startData = applySiteTimeCap(result);
+            startData = applySiteSettings(result);
             sessionStartedAt = Date.now();
             try { localStorage.setItem(TOKEN_KEY, sessionToken); } catch (e) { /* ignore */ }
 
@@ -1212,6 +1220,8 @@ document.addEventListener('DOMContentLoaded', () => {
             ? 'Please read the rule above carefully. On the next page we ask two short questions about it.'
             : 'On the next page we ask a short question about the instructions.';
         document.getElementById('debrief-bonus').style.display = bonusOn ? '' : 'none';
+        // No-bonus participants are never told that a bonus exists, including on the consent page.
+        document.querySelectorAll('.consent-bonus-line').forEach(el => { el.style.display = bonusOn ? '' : 'none'; });
         if (!bonusOn) {
             document.getElementById('debrief-varied').textContent = 'Participants were randomly assigned to different stated purposes for the statement. Some participants saw the detector\'s verdict after every change; others did not see it while editing. The assigned writing assistant also varied. Everyone wrote the same kind of statement.';
         }
@@ -1241,7 +1251,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function resumeSession(saved) {
         sessionToken = saved.token;
-        startData = applySiteTimeCap(saved.startData);
+        startData = applySiteSettings(saved.startData);
         sessionStartedAt = saved.sessionStartedAt || Date.now();
         consentDone = !!saved.consentDone;
         cuesDone = !!saved.cuesDone;
@@ -1384,9 +1394,9 @@ Risks and Benefits
 
 Compensation
 - You will receive the base payment listed on Prolific for your participation
-- Some participants are offered a bonus that depends on how the AI-detection service rates their final statement. Whether you are offered a bonus, its amount, and the rule for earning it are shown to you in plain words before you start writing
+${hasBonus() ? `- Some participants are offered a bonus that depends on how the AI-detection service rates their final statement. Whether you are offered a bonus, its amount, and the rule for earning it are shown to you in plain words before you start writing
 - Any bonus is paid through Prolific after the study closes
-
+` : ''}
 Confidentiality
 - Your responses will be stored securely
 - ${isPrefill() ? STUDY1_TEXT.consentData : "The text you write and your messages to the assistant are sent to the assistant's provider and to AI-detection services for scoring. Your Prolific ID is never sent to these services"}
@@ -1677,7 +1687,7 @@ By clicking "I agree", you indicated that:
         syncEditorLock();
         if (!workspaceOpenedAt) {
             workspaceOpenedAt = Date.now();
-            logUiEvent('workspace_opened', { time_cap_min: startData.time_cap_min, server_time_cap_min: startData.server_time_cap_min || startData.time_cap_min, min_words: minWords() });
+            logUiEvent('workspace_opened', { time_cap_min: startData.time_cap_min, server_time_cap_min: startData.server_time_cap_min || startData.time_cap_min, bonus_usd: startData.bonus_usd, server_bonus_usd: startData.server_bonus_usd || startData.bonus_usd, min_words: minWords() });
         } else if (!resumed) {
             logUiEvent('workspace_returned', { versions: versions.length });
         }
@@ -2418,7 +2428,7 @@ By clicking "I agree", you indicated that:
             afterResult();
             return;
         }
-        const bonus = Number((f.bonus_usd !== undefined && f.bonus_usd !== null) ? f.bonus_usd : (startData.bonus_usd || 0));
+        const bonus = Number(startData.bonus_usd || 0);   // page-set amount (SITE_BONUS_USD), never the server's old value
         resultVerdict.className = '';
         resultPassed.className = '';
 
@@ -2758,7 +2768,7 @@ Purpose of the Research
 This study examines how people revise AI-assisted writing when it needs to pass as human-written, and when they decide that the writing is good enough to stop. We record each version of the statement, the detector's verdict on it, your two ratings, and your decision to keep editing or to submit.
 
 What Varied Between Participants
-Participants were randomly assigned to different stated purposes for the statement${hasBonus() ? ' and different bonus amounts' : ''}. Some participants saw the detector's verdict after every change; others did not see it while editing.${isPrefill() ? '' : ' The assigned writing assistant also varied.'} Everyone wrote the same kind of statement.
+Participants were randomly assigned to different stated purposes for the statement${hasBonus() ? ' and to whether a bonus was offered' : ''}. Some participants saw the detector's verdict after every change; others did not see it while editing.${isPrefill() ? '' : ' The assigned writing assistant also varied.'} Everyone wrote the same kind of statement.
 
 The stated purpose was a scenario for the writing task. Your statement was not sent to any employer, committee, or blog. It was scored only by AI-detection services for this study.
 
