@@ -94,6 +94,9 @@ document.addEventListener('DOMContentLoaded', () => {
     const keepEditingButton = document.getElementById('keep-editing-button');
     const submitFinalButton = document.getElementById('submit-final-button');
     const checkAiButton = document.getElementById('check-ai-button');
+    const confirmSubmitModal = document.getElementById('confirm-submit-modal');
+    const confirmSubmitYes = document.getElementById('confirm-submit-yes');
+    const confirmSubmitCancel = document.getElementById('confirm-submit-cancel');
 
     // Phase 6: result
     const resultPhaseDiv = document.getElementById('result-phase');
@@ -2343,11 +2346,38 @@ By clicking "I agree", you indicated that:
         logUiEvent('detector_checked', { seq: ctx.version.seq, first_check: firstCheck, t_ms: ctx.checkedAtMs, conf_human: parseInt(sliderHuman.value, 10), conf_detector: parseInt(sliderDetector.value, 10), label: p.label === undefined ? null : p.label, passed: p.passed === undefined ? null : p.passed }, ctx.version.version_id);
         saveState();
     });
-    submitFinalButton.addEventListener('click', () => submitRating(ratingContext && ratingContext.mode === 'timeout' ? 'timeout' : 'submit'));
+    // Submit asks "Are you sure?" first, except when time is up (then there is nothing to go back to).
+    let confirmOpenedAt = null;
+    function closeSubmitConfirm(reason) {
+        if (confirmSubmitModal.style.display === 'none') return;
+        confirmSubmitModal.style.display = 'none';
+        if (ratingContext) logUiEvent('submit_confirm_closed', { reason, ms_open: confirmOpenedAt ? Date.now() - confirmOpenedAt : null }, ratingContext.version.version_id);
+        confirmOpenedAt = null;
+    }
+    submitFinalButton.addEventListener('click', () => {
+        if (!ratingContext || ratingBusy) return;
+        if (ratingContext.mode === 'timeout') { submitRating('timeout'); return; }
+        if (!(ratingContext.touched.human && ratingContext.touched.detector)) { submitRating('submit'); return; }  // shows the slider message
+        confirmOpenedAt = Date.now();
+        // Same left/right placement as the rating screen buttons for this person
+        const submitOnLeft = !!sessionToken && parseInt(sessionToken.slice(-1), 16) % 2 === 1;
+        confirmSubmitYes.style.order = submitOnLeft ? '0' : '1';
+        confirmSubmitCancel.style.order = submitOnLeft ? '1' : '0';
+        confirmSubmitModal.style.display = 'flex';
+        logUiEvent('submit_confirm_shown', { seq: ratingContext.version.seq }, ratingContext.version.version_id);
+        if (document.activeElement && document.activeElement.blur) document.activeElement.blur();   // neither button starts highlighted
+    });
+    confirmSubmitCancel.addEventListener('click', () => closeSubmitConfirm('go_back'));
+    confirmSubmitYes.addEventListener('click', () => {
+        closeSubmitConfirm('confirmed');
+        submitRating(ratingContext && ratingContext.mode === 'timeout' ? 'timeout' : 'submit');
+    });
+    document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeSubmitConfirm('escape'); });
 
     function switchRatingToTimeoutMode() {
         if (!ratingContext) return;
         ratingContext.mode = 'timeout';
+        closeSubmitConfirm('time_up');
         setRatingButtonVisibility();
         timeoutNotice.style.display = 'block';
         submitFinalButton.textContent = 'Submit my final statement';
