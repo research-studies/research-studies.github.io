@@ -425,9 +425,11 @@ body {
     appearance: none;
     width: 100%; /* Make slider take full width of container */
     height: 12px; /* Thicker track */
-    background: #e9ecef;
+    background: #adb5bd; /* clearly visible track (was #e9ecef, nearly invisible) */
+    border: 1px solid #6c757d;
     border-radius: 6px;
     outline: none;
+    cursor: pointer;
     margin: 10px 0; /* Add some vertical spacing */
  }
 
@@ -447,7 +449,8 @@ body {
  .rating-slider::-moz-range-track {
     width: 100%;
     height: 12px;
-    background: #e9ecef;
+    background: #adb5bd;
+    border: 1px solid #6c757d;
     border-radius: 6px;
     cursor: pointer;
  }
@@ -490,6 +493,24 @@ body {
 
  #rating-buttons button {
     padding: 12px 24px;
+ }
+
+ /* Keep editing and Submit look exactly alike so neither choice is nudged; which side each
+    sits on is counterbalanced across participants in script.js */
+ button.decision-button {
+    background-color: #fff;
+    color: #212529;
+    border: 2px solid #495057;
+ }
+
+ button.decision-button:hover {
+    background-color: #f1f3f5;
+ }
+
+ button.decision-button:disabled {
+    color: #999;
+    border-color: #ccc;
+    background-color: #f5f5f5;
  }
 
  .essay-preview-details {
