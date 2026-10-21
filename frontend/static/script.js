@@ -2164,12 +2164,16 @@ By clicking "I agree", you indicated that:
         renderDetectorPanel(version);
 
         keepEditingButton.style.display = ratingContext.mode === 'timeout' ? 'none' : 'inline-block';
+        // Counterbalance button position across participants (fixed for a given person)
+        const submitOnLeft = !!sessionToken && parseInt(sessionToken.slice(-1), 16) % 2 === 1;
+        submitFinalButton.style.order = submitOnLeft ? '0' : '1';
+        keepEditingButton.style.order = submitOnLeft ? '1' : '0';
         timeoutNotice.style.display = ratingContext.mode === 'timeout' ? 'block' : 'none';
         submitFinalButton.textContent = ratingContext.mode === 'timeout' ? 'Submit my final statement' : 'Submit as my final statement';
         ratingHint.textContent = 'Move both sliders to continue.';
         updateRatingButtons();
 
-        logUiEvent('rating_screen_opened', { seq: version.seq, mode: ratingContext.mode, detector_shown: detectorPanel.style.display !== 'none' }, version.version_id);
+        logUiEvent('rating_screen_opened', { seq: version.seq, mode: ratingContext.mode, detector_shown: detectorPanel.style.display !== 'none', submit_on_left: submitOnLeft }, version.version_id);
         showMainPhase('rating');
         if (ratingContext.mode === 'timeout') armTimeoutBackstop();
     }
