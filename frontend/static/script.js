@@ -180,6 +180,16 @@ document.addEventListener('DOMContentLoaded', () => {
     const pageLoadedAt = Date.now();
     let sessionToken = null;
     let startData = null;            // response of POST /api/session/start
+    // Editing time limit set by the page. The server's own limit is only a backstop, so the page
+    // stays correct even when the server has not been redeployed with a new TIME_CAP_MIN.
+    const SITE_TIME_CAP_MIN = 5;
+    function applySiteTimeCap(data) {
+        if (data && Number(data.time_cap_min) !== SITE_TIME_CAP_MIN) {
+            data.server_time_cap_min = data.time_cap_min;
+            data.time_cap_min = SITE_TIME_CAP_MIN;
+        }
+        return data;
+    }
     let sessionStartedAt = null;     // epoch ms when /start succeeded (telemetry at_ms is relative to this)
     let currentPhase = null;
     let phaseEnteredAt = null;
@@ -1099,7 +1109,7 @@ document.addEventListener('DOMContentLoaded', () => {
         clearScreenTimer();
         currentPhase = phase;
         phaseEnteredAt = Date.now();
-        mainContainer.classList.toggle('wide', phase === 'workspace');
+        mainContainer.classList.toggle('wide', phase === 'workspace' || phase === 'rating');
         timerDisplay.style.display = (workspaceOpenedAt && (phase === 'workspace' || phase === 'rating') && !isSubmitted && !noStatement) ? 'block' : 'none';
         window.scrollTo({ top: 0, behavior: 'auto' });
 
@@ -1158,7 +1168,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (!result || !result.session_token) throw new Error('The server did not return a session.');
 
             sessionToken = result.session_token;
-            startData = result;
+            startData = applySiteTimeCap(result);
             sessionStartedAt = Date.now();
             try { localStorage.setItem(TOKEN_KEY, sessionToken); } catch (e) { /* ignore */ }
 
@@ -1187,12 +1197,12 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!startData) return;
         const mw = minWords();
         document.querySelectorAll('.consent-min-words').forEach(el => { el.textContent = String(mw); });
-        document.querySelectorAll('.consent-time-cap').forEach(el => { el.textContent = String(startData.time_cap_min || 25); });
+        document.querySelectorAll('.consent-time-cap').forEach(el => { el.textContent = String(startData.time_cap_min || 5); });
 
         document.getElementById('instr-topic-text').textContent = startData.topic_text || '';
         document.getElementById('instr-purpose-text').textContent = startData.purpose_text || '';
         document.getElementById('instr-min-words').textContent = String(mw);
-        document.getElementById('instr-time-cap').textContent = String(startData.time_cap_min || 25);
+        document.getElementById('instr-time-cap').textContent = String(startData.time_cap_min || 5);
         const bonusOn = hasBonus();
         const ruleEl = document.getElementById('instr-bonus-rule-text');
         ruleEl.textContent = bonusOn ? (startData.bonus_rule_text || '') : '';
@@ -1231,7 +1241,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function resumeSession(saved) {
         sessionToken = saved.token;
-        startData = saved.startData;
+        startData = applySiteTimeCap(saved.startData);
         sessionStartedAt = saved.sessionStartedAt || Date.now();
         consentDone = !!saved.consentDone;
         cuesDone = !!saved.cuesDone;
@@ -1603,7 +1613,9 @@ By clicking "I agree", you indicated that:
         const q1Options = shuffleArray([{ text: q1Correct, correct: true }, ...q1Distractors.map(t => ({ text: t, correct: false }))]);
 
         const q2Correct = PURPOSE_SHORT[startData.condition_stakes] || firstSentence(startData.purpose_text);
-        const q2Distractors = ['A newspaper opinion column', 'A message to a friend', 'A school essay assignment'];
+        // Every option in this list is shown; the participant's own purpose is added if it is not already in it.
+        const q2Pool = ['A cover letter for a job application', 'A personal blog post', 'A school essay assignment', 'A message to a friend', 'A statement condemning violence in the workplace'];
+        const q2Distractors = q2Pool.filter(t => t !== q2Correct);
         const q2Options = shuffleArray([{ text: q2Correct, correct: true }, ...q2Distractors.map(t => ({ text: t, correct: false }))]);
 
         document.getElementById('check-q1-text').textContent =
@@ -1614,6 +1626,9 @@ By clicking "I agree", you indicated that:
         q1Options.forEach((opt, index) => {
             document.getElementById(`check-q1-option-${index}`).textContent = opt.text;
             if (opt.correct) checkQ1CorrectIndex = index;
+        });
+        document.querySelectorAll('#check-q2-options .check-option').forEach((label, index) => {
+            label.style.display = index < q2Options.length ? '' : 'none';
         });
         q2Options.forEach((opt, index) => {
             document.getElementById(`check-q2-option-${index}`).textContent = opt.text;
@@ -1662,7 +1677,7 @@ By clicking "I agree", you indicated that:
         syncEditorLock();
         if (!workspaceOpenedAt) {
             workspaceOpenedAt = Date.now();
-            logUiEvent('workspace_opened', { time_cap_min: startData.time_cap_min, min_words: minWords() });
+            logUiEvent('workspace_opened', { time_cap_min: startData.time_cap_min, server_time_cap_min: startData.server_time_cap_min || startData.time_cap_min, min_words: minWords() });
         } else if (!resumed) {
             logUiEvent('workspace_returned', { versions: versions.length });
         }
@@ -1707,7 +1722,7 @@ By clicking "I agree", you indicated that:
     }
 
     function timeCapMs() {
-        return Number(startData.time_cap_min || 25) * 60 * 1000;
+        return Number(startData.time_cap_min || SITE_TIME_CAP_MIN) * 60 * 1000;
     }
 
     function timerTick() {
@@ -2163,7 +2178,7 @@ By clicking "I agree", you indicated that:
         ratingVersionInfo.textContent = `Version ${Number(version.seq) + 1} · ${version.word_count} words · ${describeSource(version.source)}`;
         ratingEssayPreview.textContent = version.text || '';
         const previewDetails = ratingEssayPreview.closest('details');
-        if (previewDetails) previewDetails.open = (version.source === 'prefill');
+        if (previewDetails) previewDetails.open = true;
 
         renderDetectorPanel(version);
 
