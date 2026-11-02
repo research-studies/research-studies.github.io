@@ -203,9 +203,14 @@ document.addEventListener('DOMContentLoaded', () => {
             data.bonus_rule_text = String(data.bonus_rule_text || '').replace(/\$\d+(\.\d+)?/g, formatMoney(SITE_BONUS_USD));
         }
         if (data.bonus_rule_text) {
+            // The rule itself ends at "...you do not earn the bonus."; what the detector shows and when is
+            // said once, in its own paragraph (instr-feedback-note). Strip both the server's sentences and
+            // the versions an earlier page build stored in a saved session.
             data.bonus_rule_text = String(data.bonus_rule_text)
-                .replace(" You will see the detector's verdict after every change you make.", " After each change, you can click Check for AI to see the detector's verdict.")
-                .replace(" You will not see the detector's verdict until you submit.", " You will not see the detector's verdict while you edit.");
+                .replace(" You will see the detector's verdict after every change you make.", "")
+                .replace(" You will not see the detector's verdict until you submit.", "")
+                .replace(" After each change, you can click Check for AI to see the detector's verdict.", "")
+                .replace(" You will not see the detector's verdict while you edit.", "");
         }
         return data;
     }
@@ -222,7 +227,8 @@ document.addEventListener('DOMContentLoaded', () => {
     // ---------------------------------------------------------------------------------------
     const STUDY1_TEXT = {
         taskIntro: 'You will be given a statement of around 250 words that was written by an AI. Your task is to edit it so it sounds as human as possible before moving on.',
-        workspace: 'You will see the AI-written statement in an editor. You can change it however you like: rewrite sentences, cut or add words, or fix anything that sounds off. Start over puts the original statement back.',
+        workspaceLeft: 'You will see the AI-written statement in an editor.',
+        workspaceRight: 'You can change it however you like: rewrite sentences, cut or add words, or fix anything that sounds off. Start over puts the original statement back to edit from scratch.',
         consentPurpose: 'This research examines how people edit AI-written text and how they judge whether a piece of writing looks human-written.',
         consentTask: (mw) => `Edit a short personal statement (about ${mw} words) that was written by an AI, so that it reads as human-written`,
         consentData: 'The statement text is sent to AI-detection services for scoring. Your Prolific ID is never sent to these services',
@@ -1227,6 +1233,10 @@ document.addEventListener('DOMContentLoaded', () => {
         ruleEl.textContent = bonusOn ? (startData.bonus_rule_text || '') : '';
         ruleEl.style.display = bonusOn ? '' : 'none';
         document.getElementById('instr-scoring-heading').textContent = bonusOn ? 'Your Bonus Rule' : 'How Your Statement Is Scored';
+        document.getElementById('instr-scoring-explainer').style.display = bonusOn ? 'none' : '';
+        const capMin = Number(startData.time_cap_min || 5);
+        const capWords = { 1: 'ONE', 2: 'TWO', 3: 'THREE', 4: 'FOUR', 5: 'FIVE', 6: 'SIX', 7: 'SEVEN', 8: 'EIGHT', 9: 'NINE', 10: 'TEN', 15: 'FIFTEEN', 20: 'TWENTY' };
+        document.getElementById('instr-time-line').textContent = `You will have ${capWords[capMin] || String(capMin)} ${capMin === 1 ? 'MINUTE' : 'MINUTES'} to complete the task.`;
         document.getElementById('instr-check-lead').textContent = bonusOn
             ? 'Please read the rule above carefully. On the next page we ask two short questions about it.'
             : 'On the next page we ask a short question about the instructions.';
@@ -1247,8 +1257,9 @@ document.addEventListener('DOMContentLoaded', () => {
         wordCountEl.textContent = `0 / ${mw} words`;
         if (isPrefill()) {
             document.getElementById('instr-task-intro').textContent = STUDY1_TEXT.taskIntro;
-            document.getElementById('instr-ws-left').textContent = STUDY1_TEXT.workspace;
-            document.getElementById('instr-ws-right').style.display = 'none';
+            document.getElementById('instr-ws-left').textContent = STUDY1_TEXT.workspaceLeft;
+            document.getElementById('instr-ws-right').textContent = STUDY1_TEXT.workspaceRight;
+            document.getElementById('instr-ws-right').style.display = '';
             document.getElementById('consent-purpose').textContent = STUDY1_TEXT.consentPurpose;
             document.getElementById('consent-task-item').textContent = STUDY1_TEXT.consentTask(mw);
             document.getElementById('consent-data-item').textContent = STUDY1_TEXT.consentData;

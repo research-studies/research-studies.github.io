@@ -952,3 +952,6 @@ button > * {
     gap: 16px;
     margin-top: 20px;
  }
+
+/* "Please read the rule above carefully..." line on the bonus page is bold */
+#instr-check-lead { font-weight: 700; }
