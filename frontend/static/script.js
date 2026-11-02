@@ -1236,7 +1236,7 @@ document.addEventListener('DOMContentLoaded', () => {
         document.getElementById('instr-scoring-explainer').style.display = bonusOn ? 'none' : '';
         const capMin = Number(startData.time_cap_min || 5);
         const capWords = { 1: 'ONE', 2: 'TWO', 3: 'THREE', 4: 'FOUR', 5: 'FIVE', 6: 'SIX', 7: 'SEVEN', 8: 'EIGHT', 9: 'NINE', 10: 'TEN', 15: 'FIFTEEN', 20: 'TWENTY' };
-        document.getElementById('instr-time-line').textContent = `You will have ${capWords[capMin] || String(capMin)} ${capMin === 1 ? 'MINUTE' : 'MINUTES'} to complete the task.`;
+        document.getElementById('instr-time-line').innerHTML = `You will have <strong>${capWords[capMin] || String(capMin)} ${capMin === 1 ? 'MINUTE' : 'MINUTES'}</strong> to complete the task.`;
         document.getElementById('instr-check-lead').textContent = bonusOn
             ? 'Please read the rule above carefully. On the next page we ask two short questions about it.'
             : 'On the next page we ask a short question about the instructions.';
