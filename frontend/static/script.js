@@ -54,7 +54,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const confirmInstructionsButton = document.getElementById('confirm-instructions-button');
     const comprehensionErrorEl = document.getElementById('comprehension-check-error');
     let currentInstructionPage = 1;
-    const totalInstructionPages = 5;
+    const totalInstructionPages = 6;
 
     // Phase 4: workspace
     const workspacePhaseDiv = document.getElementById('workspace-phase');
