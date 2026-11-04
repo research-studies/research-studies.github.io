@@ -232,7 +232,7 @@ document.addEventListener('DOMContentLoaded', () => {
         workspaceLeft: 'You will see the AI-written statement in an editor.',
         workspaceRight: 'You can change it however you like: rewrite sentences, cut or add words, or fix anything that sounds off. Start over puts the original statement back to edit from scratch.',
         consentPurpose: 'This research examines how people edit AI-written text and how they judge whether a piece of writing looks human-written.',
-        consentTask: (mw) => `Edit a short personal statement (about ${mw} words) that was written by an AI, so that it reads as human-written`,
+        consentTask: (mw) => `Edit a short piece of writing (about ${mw} words) that was written by an AI, so that it reads as human-written`,
         consentData: 'The statement text is sent to AI-detection services for scoring. Your Prolific ID is never sent to these services',
         startOverConfirm: 'Put the original statement back in the editor? Your last recorded version is kept on our side.'
     };
@@ -1246,7 +1246,7 @@ document.addEventListener('DOMContentLoaded', () => {
         // No-bonus participants are never told that a bonus exists, including on the consent page.
         document.querySelectorAll('.consent-bonus-line').forEach(el => { el.style.display = bonusOn ? '' : 'none'; });
         if (!bonusOn) {
-            document.getElementById('debrief-varied').textContent = 'Participants were randomly assigned to different stated purposes for the statement. Some participants could check the detector\'s verdict after each change; others did not see it while editing. The assigned writing assistant also varied. Everyone wrote the same kind of statement.';
+            document.getElementById('debrief-varied').textContent = 'Participants were randomly assigned to one of seven kinds of writing (such as a wedding speech, a eulogy, or a product review). Some participants could check the detector\'s verdict after each change; others did not see it while editing. The assigned writing assistant also varied.';
         }
         document.getElementById('instr-feedback-note').textContent = startData.condition_feedback
             ? 'After each change, you can click Check for AI on the rating screen to see the detector\'s verdict for that version. You need to check at least once before you can submit.'
@@ -1401,7 +1401,7 @@ ${isPrefill() ? STUDY1_TEXT.consentPurpose : 'This research examines how people 
 What You Will Be Asked to Do
 If you agree to participate, you will:
 - Answer a few short questions about what makes writing look AI-generated to you
-- ${isPrefill() ? STUDY1_TEXT.consentTask(minWords()) : `Produce a short personal statement (at least ${minWords()} words) using an AI writing assistant that we assign to you. The assistant writes the text; you direct it, ask for revisions, and may make small edits to its wording`}
+- ${isPrefill() ? STUDY1_TEXT.consentTask(minWords()) : `Produce a short piece of writing (at least ${minWords()} words) using an AI writing assistant that we assign to you. The assistant writes the text; you direct it, ask for revisions, and may make small edits to its wording`}
 - Each time you finish a change, rate how likely a person and an AI detector would be to judge the statement as human-written, and decide whether to keep editing or to submit
 - Have your submitted statement scored by an AI-detection service
 - Answer short questions about the task, then complete a brief demographic questionnaire
@@ -1613,11 +1613,9 @@ By clicking "I agree", you indicated that:
 
     // --- Comprehension check (bonus rule + stated purpose), from the attention-check mechanics ---
     // Short forms must stay in sync with topics.PURPOSE_BY_STAKES in the backend.
-    const PURPOSE_SHORT = {
-        low: 'A personal blog post',
-        medium: 'A cover letter for a job application',
-        high: 'A scholarship application'
-    };
+    // The seven scenarios; all seven are the answer choices in the instructions check.
+    const SCENARIO_LABELS = ['A wedding speech', 'An admissions essay', 'A eulogy', 'A product review',
+        'An insurance appeal letter', 'A mission statement', 'A character letter to a judge'];
     let comprehensionAttempts = 0;
     let checkQ1CorrectIndex = -1;
     let checkQ2CorrectIndex = -1;
@@ -1647,9 +1645,9 @@ By clicking "I agree", you indicated that:
             : ['I earn a $5.00 bonus.', 'I earn a $1.00 bonus.', 'The statement is sent back to me for another change.'];
         const q1Options = shuffleArray([{ text: q1Correct, correct: true }, ...q1Distractors.map(t => ({ text: t, correct: false }))]);
 
-        const q2Correct = PURPOSE_SHORT[startData.condition_stakes] || firstSentence(startData.purpose_text);
-        // Every option in this list is shown; the participant's own purpose is added if it is not already in it.
-        const q2Pool = ['A cover letter for a job application', 'A personal blog post', 'A school essay assignment', 'A message to a friend', 'A statement condemning violence in the workplace'];
+        const q2Correct = startData.scenario_label || firstSentence(startData.purpose_text);
+        // All seven scenarios are shown; the participant's own is the correct one.
+        const q2Pool = SCENARIO_LABELS;
         const q2Distractors = q2Pool.filter(t => t !== q2Correct);
         const q2Options = shuffleArray([{ text: q2Correct, correct: true }, ...q2Distractors.map(t => ({ text: t, correct: false }))]);
 
@@ -2873,12 +2871,12 @@ Prolific ID: ${prolificPid || 'N/A'}
 Thank you for participating in our research study. Here is a short summary of what it was about.
 
 Purpose of the Research
-This study examines how people revise AI-assisted writing when it needs to pass as human-written, and when they decide that the writing is good enough to stop. We record each version of the statement, the detector's verdict on it, your two ratings, and your decision to keep editing or to submit.
+This study examines how people revise AI-assisted writing when it needs to pass as human-written, and when they decide that the writing is good enough to stop. We record each version of the statement, the detector's verdict on it, your three ratings, and your decision to keep editing or to submit.
 
 What Varied Between Participants
-Participants were randomly assigned to different stated purposes for the statement${hasBonus() ? ' and to whether a bonus was offered' : ''}. Some participants could check the detector's verdict after each change; others did not see it while editing.${isPrefill() ? '' : ' The assigned writing assistant also varied.'} Everyone wrote the same kind of statement.
+Participants were randomly assigned to one of seven kinds of writing (such as a wedding speech, a eulogy, or a product review)${hasBonus() ? ' and to whether a bonus was offered' : ''}. Some participants could check the detector's verdict after each change; others did not see it while editing.${isPrefill() ? '' : ' The assigned writing assistant also varied.'}
 
-The stated purpose was a scenario for the writing task. Your statement was not sent to any employer, committee, or blog. It was scored only by AI-detection services for this study.
+The situation described in your task was a scenario. Your text was not sent to anyone outside this study. It was scored only by AI-detection services for this study.
 
 ${hasBonus() ? 'Your Bonus\nIf you were offered a bonus and earned it, it will be paid through Prolific after the study closes.\n\n' : ''}Questions or Concerns
 If you have any questions about this research, please contact the Principal Investigator, Nykko Vitali, at nvitali@fas.harvard.edu. If you have any concerns about your rights as a research participant, you may contact cuhs@harvard.edu.
