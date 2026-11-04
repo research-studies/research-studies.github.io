@@ -88,6 +88,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const sliderHumanValue = document.getElementById('slider-human-value');
     const sliderDetector = document.getElementById('slider-detector');
     const sliderDetectorValue = document.getElementById('slider-detector-value');
+    const sliderAi = document.getElementById('slider-ai');
+    const sliderAiValue = document.getElementById('slider-ai-value');
     const ratingHint = document.getElementById('rating-hint');
     const ratingErrorDiv = document.getElementById('rating-error');
     const ratingLoadingDiv = document.getElementById('rating-loading');
@@ -2194,7 +2196,7 @@ By clicking "I agree", you indicated that:
             mode: mode || 'normal',
             openedAt: Date.now(),
             sliderLog: [],
-            touched: { human: false, detector: false },
+            touched: { human: false, detector: false, ai: false },
             rated: false,
             checked: false,
             checkedAtMs: null
@@ -2202,10 +2204,11 @@ By clicking "I agree", you indicated that:
         ratingPending = version;
         ratingBusy = false;
 
-        // Reset both sliders to 50 with a hidden thumb (no anchoring on the previous version)
-        [sliderHuman, sliderDetector].forEach(s => { s.value = 50; s.disabled = false; s.classList.add('pristine'); });
+        // Reset all three sliders to 50 with a hidden thumb (no anchoring on the previous version)
+        [sliderHuman, sliderDetector, sliderAi].forEach(s => { s.value = 50; s.disabled = false; s.classList.add('pristine'); });
         sliderHumanValue.textContent = '–';
         sliderDetectorValue.textContent = '–';
+        sliderAiValue.textContent = '–';
         hideInlineError(ratingErrorDiv);
         ratingLoadingDiv.style.display = 'none';
 
@@ -2226,7 +2229,7 @@ By clicking "I agree", you indicated that:
         setRatingButtonVisibility();
         timeoutNotice.style.display = ratingContext.mode === 'timeout' ? 'block' : 'none';
         submitFinalButton.textContent = ratingContext.mode === 'timeout' ? 'Submit my final statement' : 'Submit as my final statement';
-        ratingHint.textContent = 'Move both sliders to continue.';
+        ratingHint.textContent = 'Move all three sliders to continue.';
         updateRatingButtons();
 
         logUiEvent('rating_screen_opened', { seq: version.seq, mode: ratingContext.mode, feedback: isFeedback(), check_offered: checkAiButton.style.display !== 'none', submit_offered: submitFinalButton.style.display !== 'none', submit_on_left: submitOnLeft }, version.version_id);
@@ -2287,7 +2290,7 @@ By clicking "I agree", you indicated that:
 
     function updateRatingButtons() {
         if (!ratingContext) return;
-        const both = ratingContext.touched.human && ratingContext.touched.detector;
+        const both = ratingContext.touched.human && ratingContext.touched.detector && ratingContext.touched.ai;
         const ready = !ratingBusy && (both || ratingContext.mode === 'timeout');
         keepEditingButton.disabled = !ready || ratingContext.mode === 'timeout';
         submitFinalButton.disabled = !ready;
@@ -2329,14 +2332,15 @@ By clicking "I agree", you indicated that:
     }
     attachSliderLogging(sliderHuman, sliderHumanValue, 'human');
     attachSliderLogging(sliderDetector, sliderDetectorValue, 'detector');
+    attachSliderLogging(sliderAi, sliderAiValue, 'ai');
 
     keepEditingButton.addEventListener('click', () => submitRating('continue'));
     // Check for AI: the ratings are locked first, so they are given before the verdict is seen.
     checkAiButton.addEventListener('click', () => {
         const ctx = ratingContext;
         if (!ctx || ratingBusy || ctx.checked || !isFeedback()) return;
-        if (!(ctx.touched.human && ctx.touched.detector)) {
-            showInlineError(ratingErrorDiv, 'Please move both sliders before you check.');
+        if (!(ctx.touched.human && ctx.touched.detector && ctx.touched.ai)) {
+            showInlineError(ratingErrorDiv, 'Please move all three sliders before you check.');
             return;
         }
         hideInlineError(ratingErrorDiv);
@@ -2346,15 +2350,17 @@ By clicking "I agree", you indicated that:
         hasCheckedDetector = true;
         sliderHuman.disabled = true;
         sliderDetector.disabled = true;
+        sliderAi.disabled = true;
         ctx.sliderLog.push({ slider: 'human', event: 'detector_checked', t_ms: ctx.checkedAtMs, value: parseInt(sliderHuman.value, 10) });
         ctx.sliderLog.push({ slider: 'detector', event: 'detector_checked', t_ms: ctx.checkedAtMs, value: parseInt(sliderDetector.value, 10) });
+        ctx.sliderLog.push({ slider: 'ai', event: 'detector_checked', t_ms: ctx.checkedAtMs, value: parseInt(sliderAi.value, 10) });
         renderDetectorPanel(ctx.version, true);
         setRatingButtonVisibility();
         updateRatingButtons();
         ratingHint.textContent = 'Now choose whether to keep editing or submit.';
         ratingHint.style.display = 'block';
         const p = (ctx.version.detector && ctx.version.detector.pangram) || {};
-        logUiEvent('detector_checked', { seq: ctx.version.seq, first_check: firstCheck, t_ms: ctx.checkedAtMs, conf_human: parseInt(sliderHuman.value, 10), conf_detector: parseInt(sliderDetector.value, 10), label: p.label === undefined ? null : p.label, passed: p.passed === undefined ? null : p.passed }, ctx.version.version_id);
+        logUiEvent('detector_checked', { seq: ctx.version.seq, first_check: firstCheck, t_ms: ctx.checkedAtMs, conf_human: parseInt(sliderHuman.value, 10), conf_detector: parseInt(sliderDetector.value, 10), conf_ai: parseInt(sliderAi.value, 10), label: p.label === undefined ? null : p.label, passed: p.passed === undefined ? null : p.passed }, ctx.version.version_id);
         saveState();
     });
     // Submit asks "Are you sure?" first, except when time is up (then there is nothing to go back to).
@@ -2368,7 +2374,7 @@ By clicking "I agree", you indicated that:
     submitFinalButton.addEventListener('click', () => {
         if (!ratingContext || ratingBusy) return;
         if (ratingContext.mode === 'timeout') { submitRating('timeout'); return; }
-        if (!(ratingContext.touched.human && ratingContext.touched.detector)) { submitRating('submit'); return; }  // shows the slider message
+        if (!(ratingContext.touched.human && ratingContext.touched.detector && ratingContext.touched.ai)) { submitRating('submit'); return; }  // shows the slider message
         confirmOpenedAt = Date.now();
         // Same left/right placement as the rating screen buttons for this person
         const submitOnLeft = !!sessionToken && parseInt(sessionToken.slice(-1), 16) % 2 === 1;
@@ -2401,7 +2407,7 @@ By clicking "I agree", you indicated that:
     function armTimeoutBackstop() {
         startScreenTimer(RATING_TIMEOUT_BACKSTOP_MS, 'rating_timeout_backstop', () => {
             if (ratingContext && !ratingBusy && !isSubmitted) {
-                logUiEvent('rating_auto_submitted_after_timeout', { human_touched: ratingContext.touched.human, detector_touched: ratingContext.touched.detector }, ratingContext.version.version_id);
+                logUiEvent('rating_auto_submitted_after_timeout', { human_touched: ratingContext.touched.human, detector_touched: ratingContext.touched.detector, ai_touched: ratingContext.touched.ai }, ratingContext.version.version_id);
                 submitRating('timeout');
             }
         }, true);
@@ -2410,9 +2416,9 @@ By clicking "I agree", you indicated that:
     async function submitRating(decision) {
         if (!ratingContext || ratingBusy || !sessionToken) return;
         const ctx = ratingContext;
-        const both = ctx.touched.human && ctx.touched.detector;
+        const both = ctx.touched.human && ctx.touched.detector && ctx.touched.ai;
         if (!both && ctx.mode !== 'timeout') {
-            showInlineError(ratingErrorDiv, 'Please move both sliders before you continue.');
+            showInlineError(ratingErrorDiv, 'Please move all three sliders before you continue.');
             return;
         }
         clearScreenTimer();
@@ -2423,24 +2429,29 @@ By clicking "I agree", you indicated that:
         ratingLoadingDiv.style.display = 'block';
         sliderHuman.disabled = true;
         sliderDetector.disabled = true;
+        sliderAi.disabled = true;
 
         const confHuman = parseInt(sliderHuman.value, 10);
         const confDetector = parseInt(sliderDetector.value, 10);
+        const confAi = parseInt(sliderAi.value, 10);
         const tSubmit = Date.now() - ctx.openedAt;
 
         if (!ctx.rated) {
             ctx.sliderLog.push({ slider: 'human', event: 'slider_submit', t_ms: tSubmit, value: confHuman });
             ctx.sliderLog.push({ slider: 'detector', event: 'slider_submit', t_ms: tSubmit, value: confDetector });
+            ctx.sliderLog.push({ slider: 'ai', event: 'slider_submit', t_ms: tSubmit, value: confAi });
             const payload = {
                 version_id: ctx.version.version_id,
                 conf_human: confHuman,
                 conf_detector: confDetector,
+                conf_ai: confAi,
                 decision,
                 seconds_on_screen: tSubmit / 1000,
                 slider_log: {
                     events: ctx.sliderLog,
                     human_touched: ctx.touched.human,
                     detector_touched: ctx.touched.detector,
+                    ai_touched: ctx.touched.ai,
                     detector_checked: !!ctx.checked,
                     detector_checked_t_ms: ctx.checkedAtMs,
                     mode: ctx.mode,
@@ -2450,7 +2461,7 @@ By clicking "I agree", you indicated that:
             try {
                 await apiPost(`/api/session/${sessionToken}/rate`, payload);
                 ctx.rated = true;
-                logUiEvent('rating_submitted', { decision, conf_human: confHuman, conf_detector: confDetector, seconds_on_screen: tSubmit / 1000 }, ctx.version.version_id);
+                logUiEvent('rating_submitted', { decision, conf_human: confHuman, conf_detector: confDetector, conf_ai: confAi, seconds_on_screen: tSubmit / 1000 }, ctx.version.version_id);
             } catch (error) {
                 logUiEvent('rating_post_failed', { decision, code: error.code || null, status: error.status || null, message: error.message }, ctx.version.version_id);
                 if (error.code === 'unknown_session') { handleUnknownSession(); return; }
@@ -2458,6 +2469,7 @@ By clicking "I agree", you indicated that:
                 ratingLoadingDiv.style.display = 'none';
                 sliderHuman.disabled = false;
                 sliderDetector.disabled = false;
+                sliderAi.disabled = false;
                 updateRatingButtons();
                 const msg = isNetworkError(error)
                     ? 'We could not reach the server. Check your connection, then try again.'

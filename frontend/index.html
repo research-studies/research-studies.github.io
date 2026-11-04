@@ -280,7 +280,7 @@
                 <div class="instruction-page" id="instruction-page-4" style="display: none;">
                     <div class="instruction-content">
                         <h3>Finishing a Change</h3>
-                        <p>You will then rate the statement on two sliders and choose to <strong>keep editing</strong> or <strong>submit</strong>. You can make as many changes as you like within the time limit.</p>
+                        <p>You will then rate the statement on three sliders and choose to <strong>keep editing</strong> or <strong>submit</strong>. You can make as many changes as you like within the time limit.</p>
                         <p>You have <strong><span id="instr-time-cap">5</span> minutes</strong> for the editing part. A timer is shown at the top right. When time runs out, your most recent finished version is submitted automatically.</p>
                         <p><strong>Do not refresh the page</strong> during the task.</p>
                     </div>
@@ -421,13 +421,23 @@
                     </div>
                 </div>
 
+                <div class="slider-block">
+                    <p class="slider-question"><strong>How much does this text read as AI generated to you?</strong></p>
+                    <label for="slider-ai">How much: <span id="slider-ai-value" class="slider-value">&ndash;</span>%</label>
+                    <input type="range" id="slider-ai" class="rating-slider pristine" min="0" max="100" step="1" value="50">
+                    <div class="slider-labels">
+                        <span class="label-left">0% (Not at all)</span>
+                        <span class="label-center">50%</span>
+                        <span class="label-right">100% (Completely)</span>
+                    </div>
+                </div>
                 <div id="detector-panel" class="detector-panel" style="display: none;">
                     <p class="detector-title">Detector verdict for this version</p>
                     <p id="detector-label" class="detector-label"></p>
                     <p id="detector-pass" class="detector-pass"></p>
                 </div>
 
-                <p id="rating-hint" class="muted small">Move both sliders to continue.</p>
+                <p id="rating-hint" class="muted small">Move all three sliders to continue.</p>
                 <div id="rating-error" class="inline-error" style="display: none;"></div>
                 <div id="rating-loading" class="loading-message" style="display: none;">Saving...</div>
 
