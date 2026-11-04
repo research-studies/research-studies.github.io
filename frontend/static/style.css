@@ -969,3 +969,26 @@ button > * {
 
 /* "Please read the rule above carefully..." line on the bonus page is bold */
 #instr-check-lead { font-weight: 700; }
+
+/* Pointer to the sliders on the first rating of the untouched draft (no side bar; arrow points down) */
+.slider-callout {
+    position: relative;
+    margin: 4px 0 18px 0;
+    padding: 10px 14px;
+    background-color: #fff8e1;
+    border: 1px solid #e0a800;
+    border-radius: 8px;
+    font-weight: 600;
+    color: #5c4700;
+    text-align: center;
+}
+.slider-callout::after {
+    content: "";
+    position: absolute;
+    left: 50%;
+    bottom: -9px;
+    transform: translateX(-50%);
+    border-left: 9px solid transparent;
+    border-right: 9px solid transparent;
+    border-top: 9px solid #e0a800;
+}

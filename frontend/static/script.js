@@ -90,6 +90,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const sliderDetectorValue = document.getElementById('slider-detector-value');
     const sliderAi = document.getElementById('slider-ai');
     const sliderAiValue = document.getElementById('slider-ai-value');
+    const baselineCallout = document.getElementById('baseline-callout');
     const ratingHint = document.getElementById('rating-hint');
     const ratingErrorDiv = document.getElementById('rating-error');
     const ratingLoadingDiv = document.getElementById('rating-loading');
@@ -2230,6 +2231,8 @@ By clicking "I agree", you indicated that:
         timeoutNotice.style.display = ratingContext.mode === 'timeout' ? 'block' : 'none';
         submitFinalButton.textContent = ratingContext.mode === 'timeout' ? 'Submit my final statement' : 'Submit as my final statement';
         ratingHint.textContent = 'Move all three sliders to continue.';
+        // First rating of the untouched AI draft: a pointer to the sliders, gone once all three are moved.
+        baselineCallout.style.display = (version.source === 'prefill' && ratingContext.mode !== 'timeout') ? 'block' : 'none';
         updateRatingButtons();
 
         logUiEvent('rating_screen_opened', { seq: version.seq, mode: ratingContext.mode, feedback: isFeedback(), check_offered: checkAiButton.style.display !== 'none', submit_offered: submitFinalButton.style.display !== 'none', submit_on_left: submitOnLeft }, version.version_id);
@@ -2297,6 +2300,7 @@ By clicking "I agree", you indicated that:
         submitFinalButton.disabled = !ready;
         checkAiButton.disabled = !ready;
         ratingHint.style.display = both ? 'none' : 'block';
+        if (both) baselineCallout.style.display = 'none';
     }
 
     // Slider interaction logging: first touch, moves, submit (ms from screen open)
