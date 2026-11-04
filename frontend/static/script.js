@@ -202,7 +202,8 @@ document.addEventListener('DOMContentLoaded', () => {
         if (Number(data.bonus_usd || 0) > 0 && Number(data.bonus_usd) !== SITE_BONUS_USD) {
             data.server_bonus_usd = data.bonus_usd;
             data.bonus_usd = SITE_BONUS_USD;
-            data.bonus_rule_text = String(data.bonus_rule_text || '').replace(/\$\d+(\.\d+)?/g, formatMoney(SITE_BONUS_USD));
+            // Older servers sent one amount; the graded rule names two ($0.50 and $0.25), so leave those alone.
+            if (data.bonus_partial_usd === undefined) data.bonus_rule_text = String(data.bonus_rule_text || '').replace(/\$\d+(\.\d+)?/g, formatMoney(SITE_BONUS_USD));
         }
         if (data.bonus_rule_text) {
             // The rule itself ends at "...you do not earn the bonus."; what the detector shows and when is
@@ -1596,7 +1597,8 @@ By clicking "I agree", you indicated that:
                     checkPassed = true;
                     saveState();
                     instructionNav.style.display = 'none';
-                    confirmInstructionsButton.style.display = 'block';
+                    logUiEvent('instructions_confirmed', { via: 'check_passed' });
+                    openWorkspace(false);
                 }
             } else if (currentInstructionPage < totalInstructionPages) {
                 currentInstructionPage++;
@@ -2271,9 +2273,9 @@ By clicking "I agree", you indicated that:
             detectorPassEl.textContent = 'The detector could not score this version. You can keep editing or submit.';
         } else {
             detectorLabelEl.textContent = humanizeVerdict(p.label);
-            const passed = p.passed === true;
-            detectorPanel.classList.add(passed ? 'pass' : 'fail');
-            detectorPassEl.textContent = passed ? 'Passed' : 'Not yet';
+            const t = p.tier || (p.passed === true ? 'full' : 'none');
+            detectorPanel.classList.add(t === 'full' ? 'pass' : (t === 'partial' ? 'partial' : 'fail'));
+            detectorPassEl.textContent = t === 'full' ? 'Passed' : (t === 'partial' ? 'Partly passed' : 'Not yet');
         }
         detectorPanel.style.display = 'block';
     }
@@ -2281,6 +2283,7 @@ By clicking "I agree", you indicated that:
     function humanizeVerdict(label) {
         const l = String(label || '').trim().toLowerCase();
         if (!l) return 'No verdict';
+        if (l === 'mixed' || l.includes('mixed')) return 'Mixed: partly human, partly AI';
         if (l === 'human' || l.includes('human')) return 'More likely written by a human';
         if (l === 'ai' || l.includes('ai')) return 'More likely written by an AI';
         return `Verdict: ${label}`;
@@ -2526,8 +2529,9 @@ By clicking "I agree", you indicated that:
     // =====================================================================================
     function showResult() {
         const f = finalResult || {};
-        // Only a pass is shown. A fail, or a verdict we could not get, goes straight on to the final questions.
-        if (f.passed !== true) {
+        const finalTier = f.bonus_tier || (f.passed === true ? 'full' : 'none');
+        // Only a full or partial pass is shown. A fail, or a verdict we could not get, goes straight on to the final questions.
+        if (finalTier !== 'full' && finalTier !== 'partial') {
             resultAcknowledged = true;
             logUiEvent('result_page_skipped', { passed: f.passed === undefined ? null : f.passed, unavailable: !!(f.unavailable || f.scoring_unavailable) });
             saveState();
@@ -2535,28 +2539,31 @@ By clicking "I agree", you indicated that:
             return;
         }
         const bonus = Number(startData.bonus_usd || 0);   // page-set amount (SITE_BONUS_USD), never the server's old value
+        const partialBonus = Number(startData.bonus_partial_usd === undefined ? 0.25 : startData.bonus_partial_usd);
+        const ruleLine = `Your bonus rule was ${formatMoney(bonus)} if the statement is rated human-written, or ${formatMoney(partialBonus)} if it is rated mixed.`;
         resultVerdict.className = '';
         resultPassed.className = '';
 
         if (f.unavailable) {
             resultVerdict.textContent = 'Your statement was submitted.';
             resultPassed.textContent = 'We could not load the final verdict right now. The research team will review it.';
-            resultBonus.textContent = bonus > 0 ? `Your bonus rule was a ${formatMoney(bonus)} bonus if the statement is rated more likely human than AI.` : '';
+            resultBonus.textContent = bonus > 0 ? ruleLine : '';
         } else if (f.scoring_unavailable || (f.pangram_label === null && f.passed === null)) {
             resultVerdict.textContent = 'Your statement was submitted, but the detector could not score it right now.';
             resultPassed.textContent = bonus > 0 ? 'The research team will score it and review any bonus you are owed.' : 'The research team will score it.';
-            resultBonus.textContent = bonus > 0 ? `Your bonus rule was a ${formatMoney(bonus)} bonus if the statement is rated more likely human than AI.` : '';
+            resultBonus.textContent = bonus > 0 ? ruleLine : '';
         } else {
-            const passed = f.passed === true;
+            const passed = finalTier === 'full';
             resultVerdict.textContent = f.pangram_label
                 ? `The detector's verdict on your final statement: ${humanizeVerdict(f.pangram_label)}.`
-                : `The detector's verdict on your final statement: ${passed ? 'passed' : 'did not pass'}.`;
-            resultPassed.textContent = passed ? 'Your statement passed.' : 'Your statement did not pass.';
-            resultPassed.className = passed ? 'verdict-pass' : 'verdict-fail';
+                : `The detector's verdict on your final statement: ${passed ? 'passed' : 'partly passed'}.`;
+            resultPassed.textContent = passed ? 'Your statement passed.' : 'Your statement partly passed.';
+            resultPassed.className = passed ? 'verdict-pass' : 'verdict-partial';
             if (bonus > 0) {
-                resultBonus.textContent = f.bonus_awarded
-                    ? `You earned the ${formatMoney(bonus)} bonus. It will be paid through Prolific after the study closes.`
-                    : `You did not earn the ${formatMoney(bonus)} bonus.`;
+                const earned = Number(f.bonus_earned_usd === undefined || f.bonus_earned_usd === null ? (passed ? bonus : partialBonus) : f.bonus_earned_usd);
+                resultBonus.textContent = earned > 0
+                    ? `You earned a ${formatMoney(earned)} bonus. It will be paid through Prolific after the study closes.`
+                    : 'You did not earn a bonus.';
             } else {
                 resultBonus.textContent = '';
             }

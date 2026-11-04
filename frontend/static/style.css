@@ -557,6 +557,11 @@ body {
     background-color: #fdecea;
  }
 
+ .detector-panel.partial {
+    border-color: #e0a800;
+    background-color: #fff8e1;
+ }
+
  .detector-panel.unavailable {
     border-color: #ffc107;
     background-color: #fff3cd;
@@ -591,6 +596,10 @@ body {
     color: #b71c1c;
  }
 
+ .detector-panel.partial .detector-pass {
+    color: #8a6d00;
+ }
+
  /* Result and completion boxes */
  .result-box {
     background-color: #f8f9fa;
@@ -612,6 +621,11 @@ body {
 
  .result-box .verdict-fail {
     color: #b71c1c;
+    font-weight: 600;
+ }
+
+ .result-box .verdict-partial {
+    color: #8a6d00;
     font-weight: 600;
  }
 
