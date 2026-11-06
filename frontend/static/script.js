@@ -2436,9 +2436,11 @@ By clicking "I agree", you indicated that:
         sliderDetector.disabled = true;
         sliderAi.disabled = true;
 
-        const confHuman = parseInt(sliderHuman.value, 10);
-        const confDetector = parseInt(sliderDetector.value, 10);
-        const confAi = parseInt(sliderAi.value, 10);
+        // A slider that was never moved is recorded as empty (NA), never as its resting value of 50.
+        // Only the timeout screen can submit with untouched sliders.
+        const confHuman = ctx.touched.human ? parseInt(sliderHuman.value, 10) : null;
+        const confDetector = ctx.touched.detector ? parseInt(sliderDetector.value, 10) : null;
+        const confAi = ctx.touched.ai ? parseInt(sliderAi.value, 10) : null;
         const tSubmit = Date.now() - ctx.openedAt;
 
         if (!ctx.rated) {
