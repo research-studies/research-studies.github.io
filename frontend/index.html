@@ -251,10 +251,8 @@
                     <div class="instruction-content">
                         <h3>Your Writing Task</h3>
                         <p id="instr-task-intro">You will be asked to do a writing task with the help of an LLM. All tasks are around 250 words. The goal is for the passage to sound as human as possible before moving on.</p>
-                        <p id="instr-time-line"></p>
-                        <p id="instr-topic-text" class="key-instructions"></p>
-                        <p><strong>Purpose of the statement:</strong></p>
-                        <p id="instr-purpose-text" class="purpose-box"></p>
+                        <p id="instr-edit-how"></p>
+                        <p id="instr-scenario-line" class="key-instructions"></p>
                     </div>
                 </div>
 
@@ -264,41 +262,33 @@
                         <h3>How the Workspace Works</h3>
                         <p id="instr-ws-left">On the <strong>LEFT</strong> will be a chat with your writing assistant. The assistant is powered by an LLM. For the task, you can ask it to write a draft, revise a draft, or answer any questions to aid you in completing the task.</p>
                         <p id="instr-ws-right">On the <strong>RIGHT</strong> you will see the passage the assistant produces. Click <em>Use this as my statement</em> under an assistant reply to place it there. The statement must come from the assistant; once it is there you may ask the assistant for revisions or make small edits to its wording yourself.</p>
+                        <p id="instr-time-line"></p>
+                        <p>The statement must be at least <strong><span id="instr-min-words">250</span> words</strong>. &ldquo;Start over&rdquo; erases your changes and returns to the original statement. When time runs out, your most recent finished version will be submitted automatically.</p>
+                        <p>When you are happy with your text and have finished editing, click <strong>Done with this change</strong>.</p>
+                        <p id="instr-sequence">You will then answer three quick questions about the statement and choose to <strong>keep editing</strong> or <strong>submit</strong>.</p>
+                        <p id="instr-feedback-note"></p>
                     </div>
                 </div>
 
-                <!-- Page 3: Finishing a change, the time limit -->
+                <!-- Page 3: The bonus rule (or, with no bonus, how the statement is scored) -->
                 <div class="instruction-page" id="instruction-page-3" style="display: none;">
                     <div class="instruction-content">
-                        <h3>Finishing a Change</h3>
-                        <p>The statement must be at least <strong><span id="instr-min-words">250</span> words</strong>. A live word count is shown under the editor.</p>
-                        <p>When you finish a change, click <strong>Done with this change</strong>.</p>
-                    </div>
-                </div>
-
-                <!-- Page 4: rating, the time limit -->
-                <div class="instruction-page" id="instruction-page-4" style="display: none;">
-                    <div class="instruction-content">
-                        <h3>Finishing a Change</h3>
-                        <p>You will then rate the statement on three sliders and choose to <strong>keep editing</strong> or <strong>submit</strong>. You can make as many changes as you like within the time limit.</p>
-                        <p>You have <strong><span id="instr-time-cap">5</span> minutes</strong> for the editing part. A timer is shown at the top right. When time runs out, your most recent finished version is submitted automatically.</p>
-                        <p><strong>Do not refresh the page</strong> during the task.</p>
-                    </div>
-                </div>
-
-                <!-- Page 5: The bonus rule -->
-                <div class="instruction-page" id="instruction-page-5" style="display: none;">
-                    <div class="instruction-content">
                         <h3 id="instr-scoring-heading">Your Bonus Rule</h3>
-                        <p id="instr-bonus-rule-text" class="key-instructions bonus-box"></p>
+                        <div id="instr-bonus-rule-box" class="bonus-box">
+                            <p id="instr-bonus-lead">You can earn a bonus if the AI detector judges your statement to be written by a human:</p>
+                            <ul class="bonus-lines">
+                                <li id="instr-bonus-full"></li>
+                                <li id="instr-bonus-partial"></li>
+                                <li>If the AI detector judges your final text to be written by an AI, you do not earn a bonus.</li>
+                            </ul>
+                        </div>
                         <p id="instr-scoring-explainer">Your submitted statement is scored by an AI-detection service. The detector gives one verdict: more likely written by a human, or more likely written by an AI.</p>
-                        <p id="instr-feedback-note"></p>
                         <p id="instr-check-lead">Please read the rule above carefully. On the next page we ask two short questions about it.</p>
                     </div>
                 </div>
 
-                <!-- Page 6: Comprehension check (adapted from the attention-check mechanics) -->
-                <div class="instruction-page" id="instruction-page-6" style="display: none;">
+                <!-- Page 4: Comprehension check (adapted from the attention-check mechanics) -->
+                <div class="instruction-page" id="instruction-page-4" style="display: none;">
                     <div class="instruction-content">
                         <h3>Quick Check</h3>
 
@@ -316,9 +306,6 @@
                             <label class="check-option"><input type="radio" name="check-q2" value="1"><span id="check-q2-option-1"></span></label>
                             <label class="check-option"><input type="radio" name="check-q2" value="2"><span id="check-q2-option-2"></span></label>
                             <label class="check-option"><input type="radio" name="check-q2" value="3"><span id="check-q2-option-3"></span></label>
-                            <label class="check-option"><input type="radio" name="check-q2" value="4"><span id="check-q2-option-4"></span></label>
-                            <label class="check-option"><input type="radio" name="check-q2" value="5"><span id="check-q2-option-5"></span></label>
-                            <label class="check-option"><input type="radio" name="check-q2" value="6"><span id="check-q2-option-6"></span></label>
                         </div>
 
                         <p id="comprehension-check-error" class="inline-error" style="display: none;"></p>
@@ -328,7 +315,7 @@
                 <!-- Navigation -->
                 <div id="instruction-nav">
                     <button type="button" id="instruction-prev-btn" style="visibility: hidden;">&larr; Back</button>
-                    <span id="instruction-page-indicator">1 / 6</span>
+                    <span id="instruction-page-indicator">1 / 4</span>
                     <button type="button" id="instruction-next-btn">Next &rarr;</button>
                 </div>
             </div>
@@ -710,7 +697,7 @@
                 <h3>Purpose of the Research</h3>
                 <p>This study examines how people revise AI-assisted writing when it needs to pass as human-written, and when they decide that the writing is good enough to stop. We record each version of the statement, the detector's verdict on it, your three ratings, and your decision to keep editing or to submit.</p>
                 <h3>What Varied Between Participants</h3>
-                <p id="debrief-varied">Participants were randomly assigned to one of seven kinds of writing (such as a wedding speech, a eulogy, or a product review) and to whether a bonus was offered. Some participants could check the detector's verdict after each change; others did not see it while editing. The assigned writing assistant also varied.</p>
+                <p id="debrief-varied">Participants were randomly assigned to one of two kinds of writing (a eulogy or a product review) and to whether a bonus was offered. Some participants could check the detector's verdict after each change; others did not see it while editing. The assigned writing assistant also varied.</p>
                 <p>The situation described in your task was a scenario. Your text was not sent to anyone outside this study. It was scored only by AI-detection services for this study.</p>
                 <div id="debrief-bonus">
                 <h3>Your Bonus</h3>

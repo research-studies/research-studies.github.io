@@ -812,6 +812,23 @@ button > * {
     font-weight: 500;
 }
 
+#instructions-phase .bonus-box {
+    margin: 16px 0;
+}
+
+#instructions-phase .bonus-box p {
+    margin: 0 0 8px;
+}
+
+.bonus-box ul.bonus-lines {
+    margin: 0;
+    padding-left: 22px;
+}
+
+.bonus-box ul.bonus-lines li {
+    margin: 6px 0;
+}
+
 /* Instruction Page Pagination */
 #instructions-pagination-container {
     min-height: 300px;

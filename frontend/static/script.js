@@ -54,7 +54,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const confirmInstructionsButton = document.getElementById('confirm-instructions-button');
     const comprehensionErrorEl = document.getElementById('comprehension-check-error');
     let currentInstructionPage = 1;
-    const totalInstructionPages = 6;
+    const totalInstructionPages = 4;
 
     // Phase 4: workspace
     const workspacePhaseDiv = document.getElementById('workspace-phase');
@@ -229,10 +229,16 @@ document.addEventListener('DOMContentLoaded', () => {
     // STUDY 1 WORDING (pre-filled AI draft, hand edits only). Draft text written by Claude for
     // Nykko to rewrite. Only used when the server says study_mode = "prefill".
     // ---------------------------------------------------------------------------------------
+    // Instructions wording from Jason's edit of 9 Nov 2026 (Vitali_GE_Task_Instructions_09Nov26_jpm.docx).
     const STUDY1_TEXT = {
-        taskIntro: 'You will be given a statement of around 250 words that was written by an AI. Your task is to edit it so it sounds as human as possible before moving on.',
-        workspaceLeft: 'You will see the AI-written statement in an editor.',
-        workspaceRight: 'You can change it however you like: rewrite sentences, cut or add words, or fix anything that sounds off. Start over puts the original statement back to edit from scratch.',
+        taskIntro: 'In the following task, you will be asked to edit a short piece of text. The text was written by an AI (e.g., Chat-GPT), and your goal is to make it sound as human as possible before moving on.',
+        editHow: 'You can change the text however you like: rewrite sentences, cut or add words, or fix anything that sounds off. Once you are satisfied that your text seems like it was written by a human (rather than by an AI), you will submit it for evaluation to automatic AI-detection software.',
+        // Only people offered a bonus see this sentence; the no-bonus arm is never told a bonus exists.
+        editHowBonus: (amount) => ` If the software judges that your text was written by a human, you will receive a bonus of ${amount}.`,
+        scenarioLine: (phrase, noun) => `For this task, you will work on ${phrase}. Remember, this ${noun} was written by an AI and your task is to make it sound more human.`,
+        workspaceLeft: (capWordsUpper) => `You will see the AI-written statement in an editor. Make your changes in the editor. You will have <strong>${capWordsUpper}</strong> to complete the task. You can make as many changes as you like within the time limit.`,
+        bonusFull: (amount) => `If the AI detector judges your final text to be completely human-written, you will earn a ${amount} bonus`,
+        bonusPartial: (amount) => `If the AI detector judges your final text to be partly written by a human, you will earn a ${amount} bonus`,
         consentPurpose: 'This research examines how people edit AI-written text and how they judge whether a piece of writing looks human-written.',
         consentTask: (mw) => `Edit a short piece of writing (about ${mw} words) that was written by an AI, so that it reads as human-written`,
         consentData: 'The statement text is sent to AI-detection services for scoring. Your Prolific ID is never sent to these services',
@@ -1228,19 +1234,22 @@ document.addEventListener('DOMContentLoaded', () => {
         document.querySelectorAll('.consent-min-words').forEach(el => { el.textContent = String(mw); });
         document.querySelectorAll('.consent-time-cap').forEach(el => { el.textContent = String(startData.time_cap_min || 5); });
 
-        document.getElementById('instr-topic-text').textContent = startData.topic_text || '';
-        document.getElementById('instr-purpose-text').textContent = startData.purpose_text || '';
         document.getElementById('instr-min-words').textContent = String(mw);
-        document.getElementById('instr-time-cap').textContent = String(startData.time_cap_min || 5);
         const bonusOn = hasBonus();
-        const ruleEl = document.getElementById('instr-bonus-rule-text');
-        ruleEl.textContent = bonusOn ? (startData.bonus_rule_text || '') : '';
-        ruleEl.style.display = bonusOn ? '' : 'none';
+        const sc = scenarioWords();
+        document.getElementById('instr-scenario-line').textContent = STUDY1_TEXT.scenarioLine(sc.phrase, sc.noun);
+        // Page 3: the bonus rule as a lead line plus three lines (bonus arms), or how the statement is scored (no bonus).
+        const bonusFull = Number(startData.bonus_usd || 0);
+        const bonusPartial = startData.bonus_partial_usd !== undefined ? Number(startData.bonus_partial_usd) : bonusFull / 2;
+        document.getElementById('instr-bonus-full').textContent = STUDY1_TEXT.bonusFull(formatMoney(bonusFull));
+        document.getElementById('instr-bonus-partial').textContent = STUDY1_TEXT.bonusPartial(formatMoney(bonusPartial));
+        document.getElementById('instr-bonus-rule-box').style.display = bonusOn ? '' : 'none';
         document.getElementById('instr-scoring-heading').textContent = bonusOn ? 'Your Bonus Rule' : 'How Your Statement Is Scored';
         document.getElementById('instr-scoring-explainer').style.display = bonusOn ? 'none' : '';
         const capMin = Number(startData.time_cap_min || 5);
         const capWords = { 1: 'ONE', 2: 'TWO', 3: 'THREE', 4: 'FOUR', 5: 'FIVE', 6: 'SIX', 7: 'SEVEN', 8: 'EIGHT', 9: 'NINE', 10: 'TEN', 15: 'FIFTEEN', 20: 'TWENTY' };
-        document.getElementById('instr-time-line').innerHTML = `You will have <strong>${capWords[capMin] || String(capMin)} ${capMin === 1 ? 'MINUTE' : 'MINUTES'}</strong> to complete the task.`;
+        const capWordsUpper = `${capWords[capMin] || String(capMin)} ${capMin === 1 ? 'MINUTE' : 'MINUTES'}`;
+        document.getElementById('instr-time-line').innerHTML = `You will have <strong>${capWordsUpper}</strong> to complete the task.`;
         document.getElementById('instr-check-lead').textContent = bonusOn
             ? 'Please read the rule above carefully. On the next page we ask two short questions about it.'
             : 'On the next page we ask a short question about the instructions.';
@@ -1248,10 +1257,10 @@ document.addEventListener('DOMContentLoaded', () => {
         // No-bonus participants are never told that a bonus exists, including on the consent page.
         document.querySelectorAll('.consent-bonus-line').forEach(el => { el.style.display = bonusOn ? '' : 'none'; });
         if (!bonusOn) {
-            document.getElementById('debrief-varied').textContent = 'Participants were randomly assigned to one of seven kinds of writing (such as a wedding speech, a eulogy, or a product review). Some participants could check the detector\'s verdict after each change; others did not see it while editing. The assigned writing assistant also varied.';
+            document.getElementById('debrief-varied').textContent = 'Participants were randomly assigned to one of two kinds of writing (a eulogy or a product review). Some participants could check the detector\'s verdict after each change; others did not see it while editing. The assigned writing assistant also varied.';
         }
         document.getElementById('instr-feedback-note').textContent = startData.condition_feedback
-            ? 'After each change, you can click Check for AI on the rating screen to see the detector\'s verdict for that version. You need to check at least once before you can submit.'
+            ? 'After each change, you can click Check for AI on that screen to see the detector\'s verdict for that version. You need to check at least once before you can submit.'
             : 'The detector scores your statement after you submit it.';
 
         wsTopicText.textContent = startData.topic_text || '';
@@ -1261,9 +1270,10 @@ document.addEventListener('DOMContentLoaded', () => {
         wordCountEl.textContent = `0 / ${mw} words`;
         if (isPrefill()) {
             document.getElementById('instr-task-intro').textContent = STUDY1_TEXT.taskIntro;
-            document.getElementById('instr-ws-left').textContent = STUDY1_TEXT.workspaceLeft;
-            document.getElementById('instr-ws-right').textContent = STUDY1_TEXT.workspaceRight;
-            document.getElementById('instr-ws-right').style.display = '';
+            document.getElementById('instr-edit-how').textContent = STUDY1_TEXT.editHow + (bonusOn ? STUDY1_TEXT.editHowBonus(formatMoney(bonusFull)) : '');
+            document.getElementById('instr-ws-left').innerHTML = STUDY1_TEXT.workspaceLeft(capWordsUpper);
+            document.getElementById('instr-ws-right').style.display = 'none';
+            document.getElementById('instr-time-line').style.display = 'none';
             document.getElementById('consent-purpose').textContent = STUDY1_TEXT.consentPurpose;
             document.getElementById('consent-task-item').textContent = STUDY1_TEXT.consentTask(mw);
             document.getElementById('consent-data-item').textContent = STUDY1_TEXT.consentData;
@@ -1273,6 +1283,23 @@ document.addEventListener('DOMContentLoaded', () => {
             document.querySelector('.workspace-grid').classList.add('single');
             essayEditor.placeholder = '';
         }
+    }
+
+    // Plain-language description of the assigned piece for the instructions page. The server has sent
+    // scenario_phrase / scenario_noun since 9 Nov 2026; sessions saved before that fall back to this table.
+    const SCENARIO_WORDS = {
+        eulogy: { phrase: 'a eulogy to be read at the funeral of a close relative', noun: 'eulogy' },
+        product_review: { phrase: 'a product review to be posted on an online shopping site', noun: 'product review' },
+    };
+    function scenarioWords() {
+        const fromServer = startData.scenario_phrase && startData.scenario_noun
+            ? { phrase: startData.scenario_phrase, noun: startData.scenario_noun } : null;
+        const known = SCENARIO_WORDS[startData.scenario_id];
+        if (fromServer) return fromServer;
+        if (known) return known;
+        const label = String(startData.scenario_label || firstSentence(startData.purpose_text) || 'statement');
+        const noun = label.replace(/^(an?|the)\s+/i, '').toLowerCase();
+        return { phrase: label.charAt(0).toLowerCase() + label.slice(1), noun };
     }
 
     function resumeSession(saved) {
@@ -1616,9 +1643,8 @@ By clicking "I agree", you indicated that:
 
     // --- Comprehension check (bonus rule + stated purpose), from the attention-check mechanics ---
     // Short forms must stay in sync with topics.PURPOSE_BY_STAKES in the backend.
-    // The seven scenarios; all seven are the answer choices in the instructions check.
-    const SCENARIO_LABELS = ['A wedding speech', 'An admissions essay', 'A eulogy', 'A product review',
-        'An insurance appeal letter', 'A mission statement', 'A character letter to a judge'];
+    // The answer choices in the instructions check: the two scenarios in use plus two that are not (9 Nov 2026).
+    const SCENARIO_LABELS = ['A eulogy', 'A product review', 'A mission statement', 'A character letter to a judge'];
     let comprehensionAttempts = 0;
     let checkQ1CorrectIndex = -1;
     let checkQ2CorrectIndex = -1;
@@ -1649,9 +1675,8 @@ By clicking "I agree", you indicated that:
         const q1Options = shuffleArray([{ text: q1Correct, correct: true }, ...q1Distractors.map(t => ({ text: t, correct: false }))]);
 
         const q2Correct = startData.scenario_label || firstSentence(startData.purpose_text);
-        // All seven scenarios are shown; the participant's own is the correct one.
-        const q2Pool = SCENARIO_LABELS;
-        const q2Distractors = q2Pool.filter(t => t !== q2Correct);
+        // Four choices; the participant's own is the correct one (a scenario outside the list still gets three distractors).
+        const q2Distractors = SCENARIO_LABELS.filter(t => t !== q2Correct).slice(0, 3);
         const q2Options = shuffleArray([{ text: q2Correct, correct: true }, ...q2Distractors.map(t => ({ text: t, correct: false }))]);
 
         document.getElementById('check-q1-text').textContent =
@@ -2887,7 +2912,7 @@ Purpose of the Research
 This study examines how people revise AI-assisted writing when it needs to pass as human-written, and when they decide that the writing is good enough to stop. We record each version of the statement, the detector's verdict on it, your three ratings, and your decision to keep editing or to submit.
 
 What Varied Between Participants
-Participants were randomly assigned to one of seven kinds of writing (such as a wedding speech, a eulogy, or a product review)${hasBonus() ? ' and to whether a bonus was offered' : ''}. Some participants could check the detector's verdict after each change; others did not see it while editing.${isPrefill() ? '' : ' The assigned writing assistant also varied.'}
+Participants were randomly assigned to one of two kinds of writing (a eulogy or a product review)${hasBonus() ? ' and to whether a bonus was offered' : ''}. Some participants could check the detector's verdict after each change; others did not see it while editing.${isPrefill() ? '' : ' The assigned writing assistant also varied.'}
 
 The situation described in your task was a scenario. Your text was not sent to anyone outside this study. It was scored only by AI-detection services for this study.
 
