@@ -2299,11 +2299,15 @@ By clicking "I agree", you indicated that:
             detectorPanel.classList.add('unavailable');
             detectorLabelEl.textContent = 'Verdict unavailable';
             detectorPassEl.textContent = 'The detector could not score this version. You can keep editing or submit.';
+            detectorPassEl.style.display = '';
         } else {
+            // The verdict stands on its own. The old second line (Passed / Partly passed / Not yet) added nothing
+            // and "Not yet" read as a hint to keep going (dropped 9 Nov 2026). The colour still marks the tier.
             detectorLabelEl.textContent = humanizeVerdict(p.label);
             const t = p.tier || (p.passed === true ? 'full' : 'none');
             detectorPanel.classList.add(t === 'full' ? 'pass' : (t === 'partial' ? 'partial' : 'fail'));
-            detectorPassEl.textContent = t === 'full' ? 'Passed' : (t === 'partial' ? 'Partly passed' : 'Not yet');
+            detectorPassEl.textContent = '';
+            detectorPassEl.style.display = 'none';
         }
         detectorPanel.style.display = 'block';
     }
